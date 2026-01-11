@@ -20,7 +20,7 @@ Use it with:
 Install Agent OS to your home directory:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/buildermethods/agent-os/main/scripts/base-install.sh | bash
+curl -sSL https://raw.githubusercontent.com/dchuk/agent-os/main/scripts/base-install.sh | bash
 ```
 
 This creates `~/agent-os/` with:
