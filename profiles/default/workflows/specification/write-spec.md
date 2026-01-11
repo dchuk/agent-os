@@ -4,27 +4,32 @@
 
 1. **Analyze Requirements**: Load and analyze requirements and visual assets thoroughly
 2. **Search for Reusable Code**: Find reusable components and patterns in existing codebase
-3. **Impact Analysis**: Find ALL code affected by this change (critical for refactoring)
-4. **Create Specification**: Write comprehensive specification document
+3. **Create Specification**: Write comprehensive specification document
+4. **Update spec-meta.json**: Mark spec as specced
 
 ## Workflow
 
 ### Step 1: Analyze Requirements and Context
 
-Read and understand all inputs and THINK HARD:
+Read the following files:
+
 ```bash
-# Read the requirements document
-cat agent-os/specs/[current-spec]/planning/requirements.md
+# Read requirements
+cat agent-os/specs/[this-spec]/planning/requirements.md
+
+# Read spec metadata for roadmap linkage
+cat agent-os/specs/[this-spec]/spec-meta.json
 
 # Check for visual assets
-ls -la agent-os/specs/[current-spec]/planning/visuals/ 2>/dev/null | grep -v "^total" | grep -v "^d"
+ls -la agent-os/specs/[this-spec]/planning/visuals/ 2>/dev/null | grep -v "^total" | grep -v "^d"
 ```
 
 Parse and analyze:
 - User's feature description and goals
-- Requirements gathered by spec-shaper
+- Requirements gathered during shaping
 - Visual mockups or screenshots (if present)
 - Any constraints or out-of-scope items mentioned
+- The linked roadmap item context
 
 ### Step 2: Search for Reusable Code
 
@@ -37,132 +42,115 @@ Based on the feature requirements, identify relevant keywords and search for:
 - API patterns that could be extended
 - Database structures that could be reused
 
-Use appropriate search tools and commands for the project's technology stack to find:
-- Components that can be reused or extended
-- Patterns to follow from similar features
-- Naming conventions used in the codebase
-- Architecture patterns already established
-
 Document your findings for use in the specification.
-
-### Step 2.5: Impact Analysis - Find All Affected Code
-
-**CRITICAL:** Before creating the specification, perform comprehensive impact analysis to find ALL code that will be affected by this change. This is especially important for refactoring tasks that modify shared constants, types, or patterns.
-
-**When to perform impact analysis:**
-- Modifying shared constants or type definitions
-- Renaming or changing values used across multiple files
-- Refactoring code that may have duplicates in different packages
-- Changing APIs, database schemas, or configuration formats
-
-**How to perform impact analysis:**
-
-Use appropriate search tools for the project's technology stack (grep, ripgrep, IDE search, etc.).
-
-1. **Search for constant/type usages:**
-   ```bash
-   # Find all files using the constants/types being modified
-   # Adjust file extensions for your project's language(s)
-   grep -r "CONSTANT_NAME" .
-   ```
-
-2. **Check for duplicate definitions:**
-   ```bash
-   # Detect if the same constant is defined in multiple places (this is a RED FLAG)
-   grep -rn "CONSTANT_NAME" . | grep -E "(export|define|const|var|let|=)"
-   ```
-   If duplicates are found, they MUST be consolidated in the spec.
-
-3. **Find hardcoded values:**
-   ```bash
-   # Search for hardcoded values that should use the constant
-   grep -rn "'literal_value'" .
-   ```
-
-4. **Identify all packages/modules affected:**
-   ```bash
-   # List unique directories with matches
-   grep -r "CONSTANT_NAME" . | cut -d':' -f1 | xargs -I{} dirname {} | sort -u
-   ```
-
-5. **Find related mappings and transformations:**
-   ```bash
-   # Search for mapping structures that may reference the constants being changed
-   grep -rn "mapping\|Mapping\|MAP\|Map" .
-
-   # Search for transformation/conversion functions
-   grep -rn "transform\|Transform\|convert\|Convert\|to[A-Z]" .
-   ```
-
-   **Why this matters:** When changing constants or types, related data structures often need updates too:
-   - Lookup tables that map one value to another
-   - Configuration objects that use values from the constant
-   - Transformation functions that convert between formats
-
-   Review grep results for structures that reference or depend on the values being changed.
-
-**Document your findings:**
-- Total files affected (count)
-- Duplicate definitions found (these MUST be listed for consolidation)
-- Hardcoded values found (these MUST be listed for refactoring)
-- Related mappings/transformations found (these MUST be reviewed for updates)
-- All packages/modules requiring updates
-
-**Include in specification:** Add a "Files Requiring Modification" section OR expand "Existing Code to Leverage" to include all affected files, not just reusable ones.
 
 ### Step 3: Create Core Specification
 
-Write the main specification to `agent-os/specs/[current-spec]/spec.md`.
+Write the main specification to `agent-os/specs/[this-spec]/spec.md`.
 
-DO NOT write actual code in the spec.md document. Just describe the requirements clearly and concisely.
+**DO NOT write actual code in the spec.md document.** Just describe the requirements clearly and concisely.
 
 Keep it short and include only essential information for each section.
 
-Follow this structure exactly when creating the content of `spec.md`:
+Follow this structure exactly:
 
 ```markdown
 # Specification: [Feature Name]
+
+## Metadata
+- **Spec ID:** [spec-id]
+- **Roadmap Item:** [roadmap-item-id] - [title]
+- **Status:** Specced
+- **Created:** [date]
 
 ## Goal
 [1-2 sentences describing the core objective]
 
 ## User Stories
 - As a [user type], I want to [action] so that [benefit]
-- [repeat for up to 2 max additional user stories]
+- [Additional user stories as needed, max 5]
 
 ## Specific Requirements
 
-**Specific requirement name**
-- [Up to 8 CONCISE sub-bullet points to clarify specific sub-requirements, design or architectual decisions that go into this requirement, or the technical approach to take when implementing this requirement]
+### [Requirement Name]
+- [Concise sub-bullet points clarifying this requirement]
+- [Design or architectural decisions]
+- [Technical approach to take]
 
-[repeat for up to a max of 10 specific requirements]
+[Repeat for each specific requirement, max 10]
 
 ## Visual Design
 [If mockups provided]
 
-**`planning/visuals/[filename]`**
-- [up to 8 CONCISE bullets describing specific UI elements found in this visual to address when building]
+### `planning/visuals/[filename]`
+- [Key UI elements to implement]
+- [Layout notes]
+- [Interaction patterns]
 
-[repeat for each file in the `planning/visuals` folder]
+[Repeat for each visual file]
 
 ## Existing Code to Leverage
 
-**Code, component, or existing logic found**
-- [up to 5 bullets that describe what this existing code does and how it should be re-used or replicated when building this spec]
+### [Component/Pattern Name]
+- **Location:** [file path]
+- **What it does:** [brief description]
+- **How to reuse:** [guidance]
 
-[repeat for up to 5 existing code areas]
+[Repeat for relevant existing code, max 5]
 
 ## Out of Scope
-- [up to 10 concise descriptions of specific features that are out of scope and MUST NOT be built in this spec]
+- [Features explicitly excluded]
+- [Future enhancements not for this spec]
+
+[Max 10 items]
+```
+
+### Step 4: Update spec-meta.json
+
+Update `agent-os/specs/[this-spec]/spec-meta.json`:
+
+1. Set `status` to `"specced"`
+2. Set `speccedAt` to current ISO timestamp
+3. Set `files.hasSpec` to `true`
+
+### Step 5: Verify Roadmap Link
+
+Ensure `agent-os/product/roadmap.json` has the correct linkage:
+
+1. Find the roadmap item matching `roadmapItemId`
+2. Verify `specPath` points to this spec folder
+3. Verify `status` is at least `"specced"`
+
+If any discrepancies, update roadmap.json:
+- Set `specPath` to `"agent-os/specs/[this-spec]"`
+- Set `status` to `"specced"` (if currently `"planned"`)
+- Set `speccedAt` to current ISO timestamp (if not set)
+- Update `lastUpdated`
+
+### Step 6: Output Completion
+
+```
+Specification complete!
+
+✅ Created: `agent-os/specs/[this-spec]/spec.md`
+✅ Updated: spec-meta.json (status: specced)
+✅ Verified: roadmap.json linkage
+
+**Spec Summary:**
+- [X] requirements documented
+- [Y] visuals referenced
+- [Z] existing code patterns identified
+- [N] out-of-scope items defined
+
+Ready for task breakdown. Run /create-tasks to continue.
 ```
 
 ## Important Constraints
 
 1. **Always search for reusable code** before specifying new components
-2. **Always perform impact analysis** for refactoring tasks - find ALL affected files, not just similar ones
-3. **Check for duplicate definitions** - if the same constant/type exists in multiple packages, flag it for consolidation
-4. **Check for related mappings** - search for lookup tables, transformations, and config objects that depend on the values being changed
-5. **Reference visual assets** when available
-6. **Do NOT write actual code** in the spec
-7. **Keep each section short**, with clear, direct, skimmable specifications
-8. **Do NOT deviate from the template above** and do not add additional sections
+2. **Reference visual assets** when available
+3. **Do NOT write actual code** in the spec
+4. **Keep each section short** with clear, scannable specifications
+5. **Do NOT deviate from the template** - no additional sections
+6. **Always update spec-meta.json** after creating spec
+7. **Always verify roadmap linkage** is correct

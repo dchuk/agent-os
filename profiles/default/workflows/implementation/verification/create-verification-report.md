@@ -1,13 +1,71 @@
-Create your final verification report in `agent-os/specs/[this-spec]/verifications/final-verification.md`.
+# Create Verification Report
 
-The content of this report should follow this structure:
+Create the final verification report after all tasks have been implemented.
+
+## Workflow
+
+### Step 1: Verify All Tasks Complete
+
+Read `agent-os/specs/[this-spec]/tasks.json` and verify:
+
+1. Root `status` is `"completed"`
+2. All task groups have `status: "completed"`
+3. All tasks have `status: "completed"` or `status: "skipped"`
+4. `summary.completedTaskGroups` equals `summary.totalTaskGroups`
+
+If any tasks are incomplete, list them and stop - do not create verification report.
+
+### Step 2: Verify Metadata Consistency
+
+Read `agent-os/specs/[this-spec]/spec-meta.json` and verify:
+
+1. `status` is `"completed"` or `"in-progress"`
+2. `completedAt` is set (or will be set after this verification)
+3. `roadmapItemId` matches the one in tasks.json
+
+Read `agent-os/product/roadmap.json` and verify:
+
+1. The linked roadmap item has `status: "completed"` or `status: "in-progress"`
+2. `specPath` correctly points to this spec folder
+
+### Step 3: Run Test Suite
+
+Run the entire test suite for the application:
+
+```bash
+# Run all tests (adjust command for your test framework)
+npm test
+# or
+yarn test
+# or
+pytest
+# etc.
+```
+
+Record:
+- Total tests run
+- Tests passing
+- Tests failing
+- Any errors
+
+**DO NOT attempt to fix failing tests.** Just document them.
+
+### Step 4: Review Findings Generated
+
+Read `agent-os/product/findings.json` and find any findings where `sourceSpec` matches this spec.
+
+List these findings in the verification report.
+
+### Step 5: Create Verification Report
+
+Create `agent-os/specs/[this-spec]/verification/final-verification.md`:
 
 ```markdown
 # Verification Report: [Spec Title]
 
-**Spec:** `[spec-name]`
+**Spec:** `[spec-id]`
+**Roadmap Item:** `[roadmap-item-id]` - [roadmap-item-title]
 **Date:** [Current Date]
-**Verifier:** implementation-verifier
 **Status:** ✅ Passed | ⚠️ Passed with Issues | ❌ Failed
 
 ---
@@ -18,63 +76,101 @@ The content of this report should follow this structure:
 
 ---
 
-## 1. Tasks Verification
+## 1. Task Completion
 
 **Status:** ✅ All Complete | ⚠️ Issues Found
 
-### Completed Tasks
-- [x] Task Group 1: [Title]
-  - [x] Subtask 1.1
-  - [x] Subtask 1.2
-- [x] Task Group 2: [Title]
-  - [x] Subtask 2.1
+### Summary
+- Task Groups: [completed]/[total]
+- Tasks: [completed]/[total]
+- Subtasks: [completed]/[total]
 
-### Incomplete or Issues
-[List any tasks that were found incomplete or have issues, or note "None" if all complete]
+### Task Groups
+| ID | Name | Status | Completed At |
+|----|------|--------|--------------|
+| tg-001 | [Name] | ✅ | [timestamp] |
+| tg-002 | [Name] | ✅ | [timestamp] |
 
----
-
-## 2. Documentation Verification
-
-**Status:** ✅ Complete | ⚠️ Issues Found
-
-### Implementation Documentation
-- [x] Task Group 1 Implementation: `implementations/1-[task-name]-implementation.md`
-- [x] Task Group 2 Implementation: `implementations/2-[task-name]-implementation.md`
-
-### Verification Documentation
-[List verification documents from area verifiers if applicable]
-
-### Missing Documentation
-[List any missing documentation, or note "None"]
+### Skipped Tasks
+[List any tasks with status "skipped" and why, or "None"]
 
 ---
 
-## 3. Roadmap Updates
-
-**Status:** ✅ Updated | ⚠️ No Updates Needed | ❌ Issues Found
-
-### Updated Roadmap Items
-- [x] [Roadmap item that was marked complete]
-
-### Notes
-[Any relevant notes about roadmap updates, or note if no updates were needed]
-
----
-
-## 4. Test Suite Results
+## 2. Test Results
 
 **Status:** ✅ All Passing | ⚠️ Some Failures | ❌ Critical Failures
 
-### Test Summary
+### Summary
 - **Total Tests:** [count]
 - **Passing:** [count]
 - **Failing:** [count]
 - **Errors:** [count]
 
 ### Failed Tests
-[List any failing tests with their descriptions, or note "None - all tests passing"]
+[List failing tests with brief description, or "None - all tests passing"]
 
 ### Notes
-[Any additional context about test results, known issues, or regressions]
+[Any context about test failures - known issues, unrelated to this spec, etc.]
+
+---
+
+## 3. Roadmap & Metadata
+
+**Status:** ✅ Updated | ⚠️ Issues Found
+
+- Roadmap item `[id]` status: [status]
+- Spec-meta.json status: [status]
+- Linkage verified: ✅ | ❌
+
+---
+
+## 4. Findings Captured
+
+**Findings from this spec:** [count]
+
+[For each finding:]
+### [finding-id]: [title]
+- **Category:** [category]
+- **Confidence:** [confidence]
+- **Summary:** [brief description]
+
+[Or "No new findings captured during this implementation"]
+
+---
+
+## 5. Implementation Notes
+
+[Any notable decisions, deviations from spec, or context for future reference]
+
+---
+
+## Conclusion
+
+[Overall assessment: Implementation complete and verified / Needs attention / etc.]
 ```
+
+### Step 6: Update Final Status
+
+If verification passed (all tasks complete, tests passing or failures documented):
+
+Update `agent-os/specs/[this-spec]/spec-meta.json`:
+1. Set `status` to `"completed"`
+2. Set `completedAt` to current ISO timestamp (if not already set)
+
+Update `agent-os/product/roadmap.json`:
+1. Find the linked roadmap item
+2. Set `status` to `"completed"` (if not already)
+3. Set `completedAt` to current ISO timestamp (if not already set)
+4. Update `lastUpdated`
+
+### Step 7: Update AGENTS.md with Findings
+
+If any new findings were captured during this implementation:
+
+1. Read current AGENTS.md
+2. Find or create the "## Agent Findings" section
+3. Regenerate the findings list from `findings.json` (active findings only)
+4. Group by category
+5. Include title, confidence, and recommendation for each
+
+See the review-findings workflow for the exact AGENTS.md format.

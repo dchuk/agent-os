@@ -409,6 +409,8 @@ perform_installation() {
         # Collect files without output
         create_agent_os_folder
         install_standards
+        install_schemas
+        initialize_findings
 
         # Install Claude Code files if enabled
         if [[ "$EFFECTIVE_CLAUDE_CODE_COMMANDS" == "true" ]]; then
@@ -440,6 +442,12 @@ perform_installation() {
         echo ""
 
         install_standards
+        echo ""
+
+        install_schemas
+        echo ""
+
+        initialize_findings
         echo ""
 
         # Install Claude Code files if enabled

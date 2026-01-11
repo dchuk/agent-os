@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-os.dev/schemas/tasks.schema.json",
+  "title": "Agent OS Tasks",
+  "description": "Schema for the task breakdown of a spec, organized into task groups",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Version of this schema for migration purposes"
+    },
+    "specId": {
+      "type": "string",
+      "description": "Folder name of the spec this tasks file belongs to, e.g. '2025-01-10-user-auth'"
+    },
+    "specTitle": {
+      "type": "string",
+      "description": "Human-readable title of the spec"
+    },
+    "roadmapItemId": {
+      "type": ["string", "null"],
+      "pattern": "^roadmap-[0-9]{3,}$",
+      "description": "Reference to the roadmap item this implements"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this tasks file was created"
+    },
+    "lastUpdated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this tasks file was last modified"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "in-progress", "completed", "blocked"],
+      "description": "Overall status of task implementation"
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "totalTaskGroups": { "type": "integer" },
+        "completedTaskGroups": { "type": "integer" },
+        "totalTasks": { "type": "integer" },
+        "completedTasks": { "type": "integer" }
+      },
+      "description": "Auto-calculated summary statistics"
+    },
+    "taskGroups": {
+      "type": "array",
+      "description": "Ordered list of task groups",
+      "items": {
+        "$ref": "#/$defs/taskGroup"
+      }
+    }
+  },
+  "required": ["schemaVersion", "specId", "specTitle", "createdAt", "lastUpdated", "status", "taskGroups"],
+  "$defs": {
+    "taskGroup": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^tg-[0-9]{3,}$",
+          "description": "Unique identifier within this spec, e.g. 'tg-001'"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the task group, e.g. 'Database Layer' or 'User Authentication API'"
+        },
+        "layer": {
+          "type": "string",
+          "enum": ["database", "api", "frontend", "testing", "infrastructure", "integration", "other"],
+          "description": "Which architectural layer this group primarily affects"
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief description of what this task group accomplishes"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^tg-[0-9]{3,}$"
+          },
+          "description": "Task group IDs that must be completed before this one"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in-progress", "completed", "blocked", "skipped"],
+          "description": "Current status of this task group"
+        },
+        "assignedAgent": {
+          "type": ["string", "null"],
+          "description": "Name of the Claude Code subagent assigned to this group (for orchestration)"
+        },
+        "acceptanceCriteria": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Criteria that must be met for this task group to be considered complete"
+        },
+        "startedAt": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "completedAt": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "tasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/task"
+          }
+        }
+      },
+      "required": ["id", "name", "layer", "status", "tasks"]
+    },
+    "task": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^task-[0-9]{3,}$",
+          "description": "Unique identifier within this spec, e.g. 'task-001'"
+        },
+        "title": {
+          "type": "string",
+          "description": "What this task accomplishes"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in-progress", "completed", "skipped", "blocked"],
+          "description": "Current status of this task"
+        },
+        "notes": {
+          "type": ["string", "null"],
+          "description": "Implementation notes, gotchas, or context"
+        },
+        "subtasks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/subtask"
+          }
+        }
+      },
+      "required": ["id", "title", "status"]
+    },
+    "subtask": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^subtask-[0-9]{3,}$",
+          "description": "Unique identifier within this spec, e.g. 'subtask-001'"
+        },
+        "title": {
+          "type": "string",
+          "description": "Specific action to take"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "in-progress", "completed", "skipped"],
+          "description": "Current status of this subtask"
+        },
+        "details": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Additional bullet points of context or requirements"
+        },
+        "notes": {
+          "type": ["string", "null"],
+          "description": "Implementation notes added during execution"
+        }
+      },
+      "required": ["id", "title", "status"]
+    }
+  }
+}

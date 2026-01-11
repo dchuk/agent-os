@@ -589,6 +589,14 @@ perform_update() {
     update_standards
     echo ""
 
+    # Install/update JSON schemas
+    install_schemas
+    echo ""
+
+    # Initialize findings.json if it doesn't exist
+    initialize_findings
+    echo ""
+
     # Update Claude Code files if enabled
     if [[ "$PROJECT_CLAUDE_CODE_COMMANDS" == "true" ]]; then
         if [[ "$PROJECT_USE_CLAUDE_CODE_SUBAGENTS" == "true" ]]; then

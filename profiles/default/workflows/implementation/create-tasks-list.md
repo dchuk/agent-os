@@ -1,253 +1,159 @@
-# Task List Creation
+# Task List Creation (JSON)
 
 ## Core Responsibilities
 
-1. **Analyze spec and requirements**: Read and analyze the spec.md and/or requirements.md to inform the tasks list you will create.
-2. **Verify spec completeness**: For refactoring tasks, independently verify all affected code is covered in the spec.
-3. **Plan task execution order**: Break the requirements into a list of tasks in an order that takes their dependencies into account.
-4. **Group tasks by specialization**: Group tasks that require the same skill or stack specialization together (backend, api, ui design, etc.)
-5. **Create Tasks list**: Create the markdown tasks list broken into groups with sub-tasks.
+1. **Analyze spec and requirements**: Read and analyze the spec.md and/or requirements.md to inform the tasks list
+2. **Plan task execution order**: Break the requirements into tasks with explicit dependencies
+3. **Group tasks by specialization**: Group tasks that require the same skill or stack specialization
+4. **Create tasks.json**: Create the structured tasks file with full metadata
+5. **Update spec-meta.json**: Mark the spec as tasked and update timestamps
 
 ## Workflow
 
 ### Step 1: Analyze Spec & Requirements
 
-Read each of these files (whichever are available) and analyze them to understand the requirements for this feature implementation:
+Read each of these files (whichever are available) and analyze them:
 - `agent-os/specs/[this-spec]/spec.md`
 - `agent-os/specs/[this-spec]/planning/requirements.md`
+- `agent-os/specs/[this-spec]/spec-meta.json` (to get roadmapItemId)
 
-Use your learnings to inform the tasks list and groupings you will create in the next step.
+Use your learnings to inform the tasks list and groupings.
 
-### Step 1.5: Verify Spec Completeness (for refactoring tasks)
+### Step 2: Create tasks.json
 
-**CRITICAL:** Before creating tasks, verify the spec has identified ALL affected code. This prevents missing critical updates that could break the application.
+Generate `agent-os/specs/[this-spec]/tasks.json` following the schema at `agent-os/schemas/tasks.schema.json`.
 
-**When to perform verification:**
-- The spec involves modifying shared constants, types, or patterns
-- The spec involves renaming or changing values used across files
-- The spec mentions any kind of refactoring
-
-**How to verify:**
-
-1. **Identify key constants/types from the spec:**
-   Extract the main constants, types, or patterns being modified from the spec.
-
-2. **Run independent impact verification:**
-   ```bash
-   # For each constant/type being modified, search entire codebase
-   # Adjust for your project's file types
-   grep -r "CONSTANT_NAME" . | wc -l
-
-   # List unique directories with matches
-   grep -r "CONSTANT_NAME" . | cut -d':' -f1 | xargs -I{} dirname {} | sort -u
-   ```
-
-3. **Compare against spec:**
-   - Count files/packages mentioned in spec
-   - Compare with grep results
-   - If grep finds MORE files/packages than spec mentions, the spec may be INCOMPLETE
-
-4. **Check for duplicate definitions:**
-   ```bash
-   # Detect if same constant is defined in multiple places
-   grep -rn "CONSTANT_NAME" . | grep -E "(export|define|const|var|let|=)"
-   ```
-   If duplicates exist but aren't mentioned in spec, flag this.
-
-5. **If gaps found:**
-   - Document the missing files/packages discovered
-   - Create additional task groups to address them
-   - Include a note in tasks.md about the gaps found
-
-**Example gap documentation in tasks.md:**
-```markdown
-### Note: Additional Files Discovered
-
-During task creation, impact analysis found the following files not mentioned in spec:
-- `path/to/module/config.ext` - contains duplicate CONSTANT_NAME definition
-- `path/to/utils.ext` - hardcoded value 'xyz'
-
-These have been added as Task Group X.
+```json
+{
+  "schemaVersion": "1.0.0",
+  "specId": "[SPEC_FOLDER_NAME]",
+  "specTitle": "[FEATURE_NAME from spec.md]",
+  "roadmapItemId": "[FROM spec-meta.json or null]",
+  "createdAt": "[CURRENT_ISO_TIMESTAMP]",
+  "lastUpdated": "[CURRENT_ISO_TIMESTAMP]",
+  "status": "pending",
+  "summary": {
+    "totalTaskGroups": 0,
+    "completedTaskGroups": 0,
+    "totalTasks": 0,
+    "completedTasks": 0
+  },
+  "taskGroups": []
+}
 ```
 
-### Step 2: Create Tasks Breakdown
+### Step 3: Populate Task Groups
 
-Generate `agent-os/specs/[current-spec]/tasks.md`.
+For each logical grouping of work, create a task group:
 
-**Important**: The exact tasks, task groups, and organization will vary based on the feature's specific requirements. The following is an example format - adapt the content of the tasks list to match what THIS feature actually needs.
-
-```markdown
-# Task Breakdown: [Feature Name]
-
-## Overview
-Total Tasks: [count]
-
-## Task List
-
-### Database Layer
-
-#### Task Group 1: Data Models and Migrations
-**Dependencies:** None
-
-- [ ] 1.0 Complete database layer
-  - [ ] 1.1 Write 2-8 focused tests for [Model] functionality
-    - Limit to 2-8 highly focused tests maximum
-    - Test only critical model behaviors (e.g., primary validation, key association, core method)
-    - Skip exhaustive coverage of all methods and edge cases
-  - [ ] 1.2 Create [Model] with validations
-    - Fields: [list]
-    - Validations: [list]
-    - Reuse pattern from: [existing model if applicable]
-  - [ ] 1.3 Create migration for [table]
-    - Add indexes for: [fields]
-    - Foreign keys: [relationships]
-  - [ ] 1.4 Set up associations
-    - [Model] has_many [related]
-    - [Model] belongs_to [parent]
-  - [ ] 1.5 Ensure database layer tests pass
-    - Run ONLY the 2-8 tests written in 1.1
-    - Verify migrations run successfully
-    - Do NOT run the entire test suite at this stage
-
-**Acceptance Criteria:**
-- The 2-8 tests written in 1.1 pass
-- Models pass validation tests
-- Migrations run successfully
-- Associations work correctly
-
-### API Layer
-
-#### Task Group 2: API Endpoints
-**Dependencies:** Task Group 1
-
-- [ ] 2.0 Complete API layer
-  - [ ] 2.1 Write 2-8 focused tests for API endpoints
-    - Limit to 2-8 highly focused tests maximum
-    - Test only critical controller actions (e.g., primary CRUD operation, auth check, key error case)
-    - Skip exhaustive testing of all actions and scenarios
-  - [ ] 2.2 Create [resource] controller
-    - Actions: index, show, create, update, destroy
-    - Follow pattern from: [existing controller]
-  - [ ] 2.3 Implement authentication/authorization
-    - Use existing auth pattern
-    - Add permission checks
-  - [ ] 2.4 Add API response formatting
-    - JSON responses
-    - Error handling
-    - Status codes
-  - [ ] 2.5 Ensure API layer tests pass
-    - Run ONLY the 2-8 tests written in 2.1
-    - Verify critical CRUD operations work
-    - Do NOT run the entire test suite at this stage
-
-**Acceptance Criteria:**
-- The 2-8 tests written in 2.1 pass
-- All CRUD operations work
-- Proper authorization enforced
-- Consistent response format
-
-### Frontend Components
-
-#### Task Group 3: UI Design
-**Dependencies:** Task Group 2
-
-- [ ] 3.0 Complete UI components
-  - [ ] 3.1 Write 2-8 focused tests for UI components
-    - Limit to 2-8 highly focused tests maximum
-    - Test only critical component behaviors (e.g., primary user interaction, key form submission, main rendering case)
-    - Skip exhaustive testing of all component states and interactions
-  - [ ] 3.2 Create [Component] component
-    - Reuse: [existing component] as base
-    - Props: [list]
-    - State: [list]
-  - [ ] 3.3 Implement [Feature] form
-    - Fields: [list]
-    - Validation: client-side
-    - Submit handling
-  - [ ] 3.4 Build [View] page
-    - Layout: [description]
-    - Components: [list]
-    - Match mockup: `planning/visuals/[file]`
-  - [ ] 3.5 Apply base styles
-    - Follow existing design system
-    - Use variables from: [style file]
-  - [ ] 3.6 Implement responsive design
-    - Mobile: 320px - 768px
-    - Tablet: 768px - 1024px
-    - Desktop: 1024px+
-  - [ ] 3.7 Add interactions and animations
-    - Hover states
-    - Transitions
-    - Loading states
-  - [ ] 3.8 Ensure UI component tests pass
-    - Run ONLY the 2-8 tests written in 3.1
-    - Verify critical component behaviors work
-    - Do NOT run the entire test suite at this stage
-
-**Acceptance Criteria:**
-- The 2-8 tests written in 3.1 pass
-- Components render correctly
-- Forms validate and submit
-- Matches visual design
-
-### Testing
-
-#### Task Group 4: Test Review & Gap Analysis
-**Dependencies:** Task Groups 1-3
-
-- [ ] 4.0 Review existing tests and fill critical gaps only
-  - [ ] 4.1 Review tests from Task Groups 1-3
-    - Review the 2-8 tests written by database-engineer (Task 1.1)
-    - Review the 2-8 tests written by api-engineer (Task 2.1)
-    - Review the 2-8 tests written by ui-designer (Task 3.1)
-    - Total existing tests: approximately 6-24 tests
-  - [ ] 4.2 Analyze test coverage gaps for THIS feature only
-    - Identify critical user workflows that lack test coverage
-    - Focus ONLY on gaps related to this spec's feature requirements
-    - Do NOT assess entire application test coverage
-    - Prioritize end-to-end workflows over unit test gaps
-  - [ ] 4.3 Write up to 10 additional strategic tests maximum
-    - Add maximum of 10 new tests to fill identified critical gaps
-    - Focus on integration points and end-to-end workflows
-    - Do NOT write comprehensive coverage for all scenarios
-    - Skip edge cases, performance tests, and accessibility tests unless business-critical
-  - [ ] 4.4 Run feature-specific tests only
-    - Run ONLY tests related to this spec's feature (tests from 1.1, 2.1, 3.1, and 4.3)
-    - Expected total: approximately 16-34 tests maximum
-    - Do NOT run the entire application test suite
-    - Verify critical workflows pass
-
-**Acceptance Criteria:**
-- All feature-specific tests pass (approximately 16-34 tests total)
-- Critical user workflows for this feature are covered
-- No more than 10 additional tests added when filling in testing gaps
-- Testing focused exclusively on this spec's feature requirements
-
-## Execution Order
-
-Recommended implementation sequence:
-1. Database Layer (Task Group 1)
-2. API Layer (Task Group 2)
-3. Frontend Design (Task Group 3)
-4. Test Review & Gap Analysis (Task Group 4)
+```json
+{
+  "id": "tg-001",
+  "name": "Database Layer",
+  "layer": "database",
+  "description": "Create data models and migrations for [feature]",
+  "dependencies": [],
+  "status": "pending",
+  "assignedAgent": null,
+  "acceptanceCriteria": [
+    "Models pass validation tests",
+    "Migrations run successfully",
+    "Associations work correctly"
+  ],
+  "startedAt": null,
+  "completedAt": null,
+  "tasks": []
+}
 ```
 
-**Note**: Adapt this structure based on the actual feature requirements. Some features may need:
-- Different task groups (e.g., email notifications, payment processing, data migration)
-- Different execution order based on dependencies
-- More or fewer sub-tasks per group
+### Step 4: Populate Tasks and Subtasks
 
-## Important Constraints
+For each task within a group:
+
+```json
+{
+  "id": "task-001",
+  "title": "Create User model with validations",
+  "status": "pending",
+  "notes": null,
+  "subtasks": [
+    {
+      "id": "subtask-001",
+      "title": "Write 2-8 focused tests for User model",
+      "status": "pending",
+      "details": [
+        "Test primary validation rules",
+        "Test key associations",
+        "Skip exhaustive edge case coverage"
+      ],
+      "notes": null
+    },
+    {
+      "id": "subtask-002",
+      "title": "Implement User model",
+      "status": "pending",
+      "details": [
+        "Fields: email, name, created_at, updated_at",
+        "Validations: email format, name presence",
+        "Reuse pattern from existing models"
+      ],
+      "notes": null
+    }
+  ]
+}
+```
+
+### Step 5: Update Summary Statistics
+
+After populating all task groups, calculate and update the `summary` object:
+
+```json
+"summary": {
+  "totalTaskGroups": [COUNT_OF_TASK_GROUPS],
+  "completedTaskGroups": 0,
+  "totalTasks": [COUNT_OF_ALL_TASKS_ACROSS_GROUPS],
+  "completedTasks": 0
+}
+```
+
+### Step 6: Update spec-meta.json
+
+Update `agent-os/specs/[this-spec]/spec-meta.json`:
+
+1. Set `status` to `"tasked"`
+2. Set `taskedAt` to current ISO timestamp
+3. Set `files.hasTasks` to `true`
+
+### ID Assignment Rules
+
+- **Task Group IDs**: `tg-001`, `tg-002`, etc.
+- **Task IDs**: `task-001`, `task-002`, etc. (globally unique within the spec)
+- **Subtask IDs**: `subtask-001`, `subtask-002`, etc. (globally unique within the spec)
+- IDs are permanent and should never be reused
+
+### Layer Types
+
+Use these values for the `layer` field:
+- `database` - Models, migrations, database operations
+- `api` - API endpoints, controllers, services
+- `frontend` - UI components, pages, styling
+- `testing` - Test coverage review and gap filling
+- `infrastructure` - Config, deployment, CI/CD
+- `integration` - Third-party services, external APIs
+- `other` - Anything that doesn't fit above
+
+### Dependencies
+
+- Use task group IDs in the `dependencies` array
+- Example: `"dependencies": ["tg-001"]` means this group depends on tg-001
+- All dependencies must be completed before a group can start
+
+### Important Constraints
 
 - **Create tasks that are specific and verifiable**
-- **Verify spec completeness for refactoring tasks:** Run independent grep searches to find all affected files, not just those mentioned in spec
-- **Flag gaps discovered:** If your impact analysis finds files not in the spec, document them and create task groups to address them
-- **Group related tasks:** For example, group back-end engineering tasks together and front-end UI tasks together.
-- **Limit test writing during development**:
-  - Each task group (1-3) should write 2-8 focused tests maximum
-  - Tests should cover only critical behaviors, not exhaustive coverage
-  - Test verification should run ONLY the newly written tests, not the entire suite
-  - If there is a dedicated test coverage group for filling in gaps in test coverage, this group should add only a maximum of 10 additional tests IF NECESSARY to fill critical gaps
-- **Use a focused test-driven approach** where each task group starts with writing 2-8 tests (x.1 sub-task) and ends with running ONLY those tests (final sub-task)
+- **Group related tasks by architectural layer**
+- **Limit test writing during development**: 2-8 focused tests per task group
+- **Use explicit dependencies** rather than relying on ordering
 - **Include acceptance criteria** for each task group
-- **Reference visual assets** if visuals are available
+- **Reference visual assets** if visuals are available in planning/visuals/
+- **Task count**: Aim for 3-10 tasks per task group

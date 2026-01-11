@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-os.dev/schemas/spec-meta.schema.json",
+  "title": "Agent OS Spec Metadata",
+  "description": "Schema for spec folder metadata, providing linkage back to roadmap and tracking spec lifecycle",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Version of this schema for migration purposes"
+    },
+    "specId": {
+      "type": "string",
+      "description": "Folder name of this spec, e.g. '2025-01-10-user-auth'"
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable title of the spec"
+    },
+    "roadmapItemId": {
+      "type": ["string", "null"],
+      "pattern": "^roadmap-[0-9]{3,}$",
+      "description": "Reference to the roadmap item this implements"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["drafting", "shaped", "specced", "tasked", "in-progress", "completed", "abandoned"],
+      "description": "Current lifecycle state of this spec"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the spec folder was initialized"
+    },
+    "shapedAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When requirements.md was completed"
+    },
+    "speccedAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When spec.md was completed"
+    },
+    "taskedAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When tasks.json was created"
+    },
+    "implementationStartedAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When implementation began"
+    },
+    "completedAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When implementation was verified complete"
+    },
+    "abandonedAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When spec was abandoned"
+    },
+    "abandonedReason": {
+      "type": ["string", "null"],
+      "description": "Why the spec was abandoned"
+    },
+    "files": {
+      "type": "object",
+      "description": "Presence tracking for key spec files",
+      "properties": {
+        "hasRequirements": { "type": "boolean" },
+        "hasSpec": { "type": "boolean" },
+        "hasTasks": { "type": "boolean" },
+        "hasVisuals": { "type": "boolean" },
+        "visualCount": { "type": "integer" }
+      }
+    },
+    "findingsGenerated": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^finding-[0-9]{3,}$"
+      },
+      "description": "Finding IDs that were discovered during this spec's implementation"
+    }
+  },
+  "required": ["schemaVersion", "specId", "title", "status", "createdAt"]
+}

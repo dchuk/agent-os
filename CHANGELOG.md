@@ -3,6 +3,33 @@
 Get notified of major releases by subscribing here:
 https://buildermethods.com/agent-os
 
+## [3.0.0] - 2026-01-11
+
+### Added
+- **JSON Schemas**: Structured schemas for roadmap, tasks, findings, and spec metadata
+  - `roadmap.schema.json` - Product roadmap with status tracking and dependencies
+  - `tasks.schema.json` - Task breakdown with groups, tasks, and subtasks
+  - `findings.schema.json` - Institutional knowledge capture
+  - `spec-meta.schema.json` - Spec metadata and roadmap linkage
+- **Findings System**: Capture and maintain institutional knowledge during implementation
+  - Automatically captured post-implementation
+  - Categories: build-config, error-pattern, code-pattern, dependency, performance, testing, architecture, tooling, security
+  - Confidence levels and deduplication support
+- **New Command**: `/review-findings` for maintaining the findings database
+- **Bidirectional Linking**: Specs and roadmap items are now explicitly linked via IDs
+
+### Changed
+- `roadmap.md` replaced with `roadmap.json` - structured format with explicit dependencies and status tracking
+- `tasks.md` replaced with `tasks.json` - structured task groups with layer classification
+- All spec workflows now create and maintain `spec-meta.json` for lifecycle tracking
+- Implementation workflow now captures findings and updates AGENTS.md
+- Verification workflow reviews findings generated during implementation
+
+### Migration
+- Existing markdown roadmaps and task files will need manual conversion to JSON format
+- New projects will use JSON format automatically
+- See README for schema documentation and examples
+
 ## [2.1.1] - 2025-10-29
 
 - Replaced references to 'spec-researcher' (depreciated agent name) with 'spec-shaper'.

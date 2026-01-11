@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-os.dev/schemas/findings.schema.json",
+  "title": "Agent OS Findings",
+  "description": "Schema for capturing institutional knowledge discovered during implementation",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Version of this schema for migration purposes"
+    },
+    "lastUpdated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When findings were last modified"
+    },
+    "lastReviewedAt": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When findings were last reviewed by the review-findings command"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    }
+  },
+  "required": ["schemaVersion", "lastUpdated", "findings"],
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^finding-[0-9]{3,}$",
+          "description": "Unique identifier, e.g. 'finding-001'"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "build-config",
+            "error-pattern",
+            "code-pattern",
+            "dependency",
+            "performance",
+            "testing",
+            "architecture",
+            "tooling",
+            "security",
+            "other"
+          ],
+          "description": "Category of the finding for organization"
+        },
+        "title": {
+          "type": "string",
+          "description": "Short descriptive title"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed explanation of what was discovered"
+        },
+        "context": {
+          "type": "string",
+          "description": "When and where this finding applies"
+        },
+        "recommendation": {
+          "type": "string",
+          "description": "What to do about it - actionable guidance"
+        },
+        "codeExample": {
+          "type": ["string", "null"],
+          "description": "Optional code snippet demonstrating the pattern"
+        },
+        "antiPattern": {
+          "type": ["string", "null"],
+          "description": "Optional example of what NOT to do"
+        },
+        "relatedFiles": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "File paths relevant to this finding"
+        },
+        "sourceSpec": {
+          "type": "string",
+          "description": "Spec ID where this was discovered, e.g. '2025-01-10-user-auth'"
+        },
+        "discoveredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this finding was first recorded"
+        },
+        "lastConfirmedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this finding was last confirmed as still valid"
+        },
+        "confirmedCount": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1,
+          "description": "Number of times this pattern has been encountered"
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "How confident the agent is this is a genuine pattern vs one-off"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "archived", "superseded"],
+          "default": "active",
+          "description": "Whether this finding is still relevant"
+        },
+        "supersededBy": {
+          "type": ["string", "null"],
+          "pattern": "^finding-[0-9]{3,}$",
+          "description": "If superseded, the finding ID that replaces this one"
+        },
+        "archivedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "When this finding was archived"
+        },
+        "archivedReason": {
+          "type": ["string", "null"],
+          "description": "Why this finding was archived"
+        }
+      },
+      "required": [
+        "id",
+        "category",
+        "title",
+        "description",
+        "context",
+        "recommendation",
+        "sourceSpec",
+        "discoveredAt",
+        "lastConfirmedAt",
+        "confidence",
+        "status"
+      ]
+    }
+  }
+}

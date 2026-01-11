@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-os.dev/schemas/roadmap.schema.json",
+  "title": "Agent OS Roadmap",
+  "description": "Schema for the product roadmap tracking features from planning through completion",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Version of this schema for migration purposes"
+    },
+    "productName": {
+      "type": "string",
+      "description": "Name of the product this roadmap belongs to"
+    },
+    "lastUpdated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of last modification"
+    },
+    "items": {
+      "type": "array",
+      "description": "Ordered list of roadmap items by priority",
+      "items": {
+        "$ref": "#/$defs/roadmapItem"
+      }
+    }
+  },
+  "required": ["schemaVersion", "lastUpdated", "items"],
+  "$defs": {
+    "roadmapItem": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^roadmap-[0-9]{3,}$",
+          "description": "Unique identifier, e.g. 'roadmap-001'"
+        },
+        "title": {
+          "type": "string",
+          "description": "Short descriptive title for the feature"
+        },
+        "description": {
+          "type": "string",
+          "description": "1-2 sentence description of the feature and its value"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["planned", "specced", "in-progress", "completed", "deferred"],
+          "description": "Current state of this roadmap item"
+        },
+        "effort": {
+          "type": "string",
+          "enum": ["XS", "S", "M", "L", "XL"],
+          "description": "Estimated effort: XS=1day, S=2-3days, M=1week, L=2weeks, XL=3+weeks"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Priority order (1 = highest priority)"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^roadmap-[0-9]{3,}$"
+          },
+          "description": "Array of roadmap item IDs this depends on"
+        },
+        "specPath": {
+          "type": ["string", "null"],
+          "description": "Relative path to spec folder if specced, e.g. 'agent-os/specs/2025-01-10-user-auth'"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional tags for categorization (e.g. 'backend', 'frontend', 'infrastructure')"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this item was added to the roadmap"
+        },
+        "speccedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "When the spec was created for this item"
+        },
+        "startedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "When implementation began"
+        },
+        "completedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "When implementation was completed"
+        },
+        "deferredAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "When this item was deferred"
+        },
+        "deferredReason": {
+          "type": ["string", "null"],
+          "description": "Reason for deferring this item"
+        }
+      },
+      "required": ["id", "title", "description", "status", "effort", "priority", "createdAt"]
+    }
+  }
+}

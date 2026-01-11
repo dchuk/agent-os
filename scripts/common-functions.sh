@@ -1458,6 +1458,76 @@ install_claude_code_skills() {
     fi
 }
 
+# Install JSON schemas to project
+install_schemas() {
+    if [[ "$DRY_RUN" != "true" ]]; then
+        print_status "Installing JSON schemas..."
+    fi
+
+    local schemas_count=0
+    local schema_dir="$PROJECT_DIR/agent-os/schemas"
+
+    ensure_dir "$schema_dir"
+
+    # Copy each schema file
+    for schema in roadmap tasks findings spec-meta; do
+        local source=$(get_profile_file "$EFFECTIVE_PROFILE" "schemas/${schema}.schema.json" "$BASE_DIR")
+        local dest="$schema_dir/${schema}.schema.json"
+
+        if [[ -f "$source" ]]; then
+            if [[ "$DRY_RUN" == "true" ]]; then
+                INSTALLED_FILES+=("$dest")
+            else
+                cp "$source" "$dest"
+                print_verbose "Copied schema: $dest"
+            fi
+            ((schemas_count++)) || true
+        fi
+    done
+
+    if [[ "$DRY_RUN" != "true" ]]; then
+        if [[ $schemas_count -gt 0 ]]; then
+            echo "✓ Installed $schemas_count JSON schemas in agent-os/schemas"
+        fi
+    fi
+}
+
+# Initialize findings.json if it doesn't exist
+initialize_findings() {
+    local findings_file="$PROJECT_DIR/agent-os/product/findings.json"
+
+    if [[ ! -f "$findings_file" ]] || [[ "$DRY_RUN" == "true" ]]; then
+        ensure_dir "$(dirname "$findings_file")"
+
+        if [[ "$DRY_RUN" == "true" ]]; then
+            if [[ ! -f "$findings_file" ]]; then
+                INSTALLED_FILES+=("$findings_file")
+                print_verbose "Would initialize findings.json"
+            fi
+        else
+            if [[ ! -f "$findings_file" ]]; then
+                cat > "$findings_file" << 'EOF'
+{
+  "schemaVersion": "1.0.0",
+  "lastUpdated": "TIMESTAMP_PLACEHOLDER",
+  "lastReviewedAt": null,
+  "findings": []
+}
+EOF
+                # Replace placeholder with actual timestamp
+                local timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+                if [[ "$(uname)" == "Darwin" ]]; then
+                    sed -i '' "s/TIMESTAMP_PLACEHOLDER/$timestamp/" "$findings_file"
+                else
+                    sed -i "s/TIMESTAMP_PLACEHOLDER/$timestamp/" "$findings_file"
+                fi
+                print_verbose "Initialized findings.json"
+                echo "✓ Initialized agent-os/product/findings.json"
+            fi
+        fi
+    fi
+}
+
 # Install improve-skills command (only when Skills are enabled)
 install_improve_skills_command() {
     # Only install if both Claude Code commands AND Skills are enabled
