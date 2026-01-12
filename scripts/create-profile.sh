@@ -9,7 +9,7 @@ set -e  # Exit on error
 
 # Get the directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-BASE_DIR="$HOME/agent-os"
+BASE_DIR="$( cd "$SCRIPT_DIR/.." && pwd )"
 PROFILES_DIR="$BASE_DIR/profiles"
 
 # Source common functions

@@ -1,0 +1,15 @@
+# Rails Apps Profile Configuration
+# This profile extends the default Agent OS profile with Rails-specific agents and skills
+
+# Inherit from the default profile
+# This gives us all the default workflows, commands, and schemas
+inherits_from: default
+
+# Exclude inherited standards files since we use Rails-specific skills instead
+# The skills folder contains comprehensive Rails patterns that replace generic standards
+exclude_inherited_files:
+  - standards/**
+
+# Profile metadata
+name: rails-apps
+description: Specialized Agent OS profile for Ruby on Rails applications with 37signals-style and modern Rails patterns

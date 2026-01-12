@@ -372,25 +372,20 @@ get_profile_files() {
     local current_profile=$profile
     local visited_profiles=""
     local all_files=""
-    local excluded_patterns=""
 
-    # First, collect exclusion patterns and file overrides
+    # Build the inheritance chain (from child to parent)
+    local profile_chain=""
     while true; do
         if [[ " $visited_profiles " == *" $current_profile "* ]]; then
             break
         fi
         visited_profiles="$visited_profiles $current_profile"
+        profile_chain="$profile_chain $current_profile"
 
         local profile_dir="$base_dir/profiles/$current_profile"
         local profile_config="$profile_dir/profile-config.yml"
 
-        # Add exclusion patterns from this profile
         if [[ -f "$profile_config" ]]; then
-            local patterns=$(get_yaml_array "$profile_config" "exclude_inherited_files")
-            if [[ -n "$patterns" ]]; then
-                excluded_patterns="$excluded_patterns"$'\n'"$patterns"
-            fi
-
             local inherits_from=$(get_yaml_value "$profile_config" "inherits_from" "default")
             if [[ "$inherits_from" == "false" || -z "$inherits_from" ]]; then
                 break
@@ -401,30 +396,10 @@ get_profile_files() {
         fi
     done
 
-    # Now collect files starting from the base profile
+    # Reverse the chain to process from base to specific
     local profiles_to_process=""
-    current_profile=$profile
-    visited_profiles=""
-
-    while true; do
-        if [[ " $visited_profiles " == *" $current_profile "* ]]; then
-            break
-        fi
-        visited_profiles="$visited_profiles $current_profile"
-        profiles_to_process="$current_profile $profiles_to_process"
-
-        local profile_dir="$base_dir/profiles/$current_profile"
-        local profile_config="$profile_dir/profile-config.yml"
-
-        if [[ -f "$profile_config" ]]; then
-            local inherits_from=$(get_yaml_value "$profile_config" "inherits_from" "default")
-            if [[ "$inherits_from" == "false" || -z "$inherits_from" ]]; then
-                break
-            fi
-            current_profile=$inherits_from
-        else
-            break
-        fi
+    for p in $profile_chain; do
+        profiles_to_process="$p $profiles_to_process"
     done
 
     # Process profiles from base to specific
@@ -436,24 +411,43 @@ get_profile_files() {
             search_dir="$profile_dir/$subdir"
         fi
 
+        # Collect exclusion patterns from all CHILD profiles (profiles after this one in chain)
+        local applicable_exclusions=""
+        local found_current="false"
+        for check_profile in $profiles_to_process; do
+            if [[ "$check_profile" == "$proc_profile" ]]; then
+                found_current="true"
+                continue
+            fi
+            # After finding current, remaining profiles are children - get their exclusions
+            if [[ "$found_current" == "true" ]]; then
+                local check_config="$base_dir/profiles/$check_profile/profile-config.yml"
+                if [[ -f "$check_config" ]]; then
+                    local patterns=$(get_yaml_array "$check_config" "exclude_inherited_files")
+                    if [[ -n "$patterns" ]]; then
+                        applicable_exclusions="$applicable_exclusions"$'\n'"$patterns"
+                    fi
+                fi
+            fi
+        done
+
         if [[ -d "$search_dir" ]]; then
             find "$search_dir" -type f \( -name "*.md" -o -name "*.yml" -o -name "*.yaml" \) 2>/dev/null | while read file; do
                 relative_path="${file#$profile_dir/}"
 
-                # Check if excluded
+                # Check if excluded by child profile patterns
                 excluded="false"
-                while read pattern; do
-                    if [[ -n "$pattern" ]] && match_pattern "$relative_path" "$pattern"; then
-                        excluded="true"
-                        break
-                    fi
-                done <<< "$excluded_patterns"
+                if [[ -n "$applicable_exclusions" ]]; then
+                    while read pattern; do
+                        if [[ -n "$pattern" ]] && match_pattern "$relative_path" "$pattern"; then
+                            excluded="true"
+                            break
+                        fi
+                    done <<< "$applicable_exclusions"
+                fi
 
                 if [[ "$excluded" != "true" ]]; then
-                    # Check if already in list (override scenario)
-                    if [[ ! " $all_files " == *" $relative_path "* ]]; then
-                        echo "$relative_path"
-                    fi
+                    echo "$relative_path"
                 fi
             done
         fi
@@ -466,7 +460,8 @@ match_pattern() {
     local pattern=$2
 
     # Convert pattern to regex
-    local regex=$(echo "$pattern" | sed 's/\*/[^\/]*/g' | sed 's/\*\*/.**/g')
+    # Order matters: replace ** first (with placeholder), then single *, then restore **
+    local regex=$(echo "$pattern" | sed 's/\*\*/__DOUBLESTAR__/g' | sed 's/\*/[^\/]*/g' | sed 's/__DOUBLESTAR__/.*/g')
 
     if [[ "$path" =~ ^${regex}$ ]]; then
         return 0

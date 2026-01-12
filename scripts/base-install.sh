@@ -8,8 +8,8 @@ set -e
 # Repository configuration
 REPO_URL="https://github.com/buildermethods/agent-os"
 
-# Installation paths
-BASE_DIR="$HOME/agent-os"
+# Installation paths - default to ~/agent-os but can be overridden
+BASE_DIR="${AGENT_OS_DIR:-$HOME/agent-os}"
 TEMP_DIR=$(mktemp -d)
 COMMON_FUNCTIONS_TEMP="$TEMP_DIR/common-functions.sh"
 
