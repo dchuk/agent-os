@@ -10,6 +10,8 @@ Implement all tasks assigned to you and ONLY those task(s) that have been assign
 2. Read `agent-os/specs/[this-spec]/spec.md` for requirements context
 3. Read `agent-os/specs/[this-spec]/spec-meta.json` for roadmap linkage
 4. Check `agent-os/specs/[this-spec]/planning/visuals/` for any visual references
+5. Read `CLAUDE.md` from the project root (if exists) - contains project-specific rules, conventions, and requirements that you MUST follow
+6. Check available skills in your system context (listed in `<available_skills>` section). Use the `Skill(skill_name)` tool to invoke relevant skills for your task (e.g., testing skills when writing tests). Skills contain important requirements you MUST follow.
 
 ### Step 2: Update Status to In-Progress
 
@@ -151,9 +153,50 @@ After completing implementation (whether partial or full), capture any findings 
 - `medium` - Encountered multiple times or seems broadly applicable
 - `high` - Clearly established pattern, encountered consistently
 
+## CRITICAL: Task Completion Rules
+
+### Rule 1: A Task Is Complete ONLY When Actually Executed
+- If a task says "Run tests" - you MUST execute the tests and see the output
+- If a task says "Verify X works" - you MUST actually verify it
+- Do NOT mark tasks as complete based on intent or assumption
+- "I wrote the code" ≠ "task complete" - you must perform the actual action described
+
+### Rule 2: Handle Missing Prerequisites
+- If a task requires a running service (dev server, database) that is not running:
+  - Start the service yourself (safe for parallel execution in isolated environments)
+- If a task requires dependencies that are not installed:
+  - Do NOT install them yourself (may conflict with parallel agents)
+  - Report the blocker and keep task status as "pending" or "blocked"
+  - Dependency installation is the responsibility of planning/setup phase
+- If you cannot determine how to proceed, ask the user for guidance
+
+### Rule 3: Task Groups Require All Tasks Complete
+- A task group can ONLY have status "completed" when ALL its tasks have status "completed"
+- Never mark a task group complete while leaving tasks incomplete
+
+### Rule 4: TDD Phases Require Actual Test Execution
+- If tasks specify TDD workflow:
+  - RED phase: Tests must be written AND executed to verify they fail
+  - GREEN phase: Tests must be executed AND pass
+- Do NOT mark TDD tasks complete without actual test execution output
+
+### Rule 5: Verification Tasks Require Evidence
+- If a task says "Manual verification" or "Verify in browser":
+  - Actually perform the verification using available tools
+  - Take screenshots as evidence when possible
+  - Store evidence in `verification/screenshots/`
+- Do NOT mark verification tasks complete without performing verification
+
+### Rule 6: Incomplete Tasks Must Stay Incomplete
+- If you cannot complete a task after attempting to resolve blockers:
+  - Keep the task's status as "pending" or set to "blocked"
+  - Add a note explaining what you tried and what blocked you
+  - NEVER set status to "completed" if you did not actually complete it
+
 ## Important Constraints
 
 - **Always update JSON files** - Keep tasks.json, spec-meta.json, and roadmap.json in sync
 - **Track status transitions** - Update status fields and timestamps as work progresses
 - **Capture findings** - Don't lose institutional knowledge gained during implementation
 - **Verify before marking complete** - Run tests and verify functionality
+- **Follow task completion rules** - Never mark tasks complete without actual execution

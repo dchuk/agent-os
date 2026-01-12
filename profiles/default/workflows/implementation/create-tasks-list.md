@@ -19,6 +19,46 @@ Read each of these files (whichever are available) and analyze them:
 
 Use your learnings to inform the tasks list and groupings.
 
+### Step 1.5: Verify Spec Completeness (for refactoring tasks)
+
+**CRITICAL:** Before creating tasks, verify the spec has identified ALL affected code. This prevents missing critical updates that could break the application.
+
+**When to perform verification:**
+- The spec involves modifying shared constants, types, or patterns
+- The spec involves renaming or changing values used across files
+- The spec mentions any kind of refactoring
+
+**How to verify:**
+
+1. **Identify key constants/types from the spec:**
+   Extract the main constants, types, or patterns being modified from the spec.
+
+2. **Run independent impact verification:**
+   ```bash
+   # For each constant/type being modified, search entire codebase
+   grep -r "CONSTANT_NAME" . | wc -l
+
+   # List unique directories with matches
+   grep -r "CONSTANT_NAME" . | cut -d':' -f1 | xargs -I{} dirname {} | sort -u
+   ```
+
+3. **Compare against spec:**
+   - Count files/packages mentioned in spec
+   - Compare with grep results
+   - If grep finds MORE files/packages than spec mentions, the spec may be INCOMPLETE
+
+4. **Check for duplicate definitions:**
+   ```bash
+   # Detect if same constant is defined in multiple places
+   grep -rn "CONSTANT_NAME" . | grep -E "(export|define|const|var|let|=)"
+   ```
+   If duplicates exist but aren't mentioned in spec, flag this.
+
+5. **If gaps found:**
+   - Document the missing files/packages discovered
+   - Create additional task groups to address them
+   - Add a note about gaps in the task group descriptions
+
 ### Step 2: Create tasks.json
 
 Generate `agent-os/specs/[this-spec]/tasks.json` following the schema at `agent-os/schemas/tasks.schema.json`.
@@ -151,6 +191,8 @@ Use these values for the `layer` field:
 ### Important Constraints
 
 - **Create tasks that are specific and verifiable**
+- **Verify spec completeness for refactoring tasks** - Run independent grep searches to find all affected files, not just those mentioned in spec
+- **Flag gaps discovered** - If your impact analysis finds files not in the spec, document them and create task groups to address them
 - **Group related tasks by architectural layer**
 - **Limit test writing during development**: 2-8 focused tests per task group
 - **Use explicit dependencies** rather than relying on ordering

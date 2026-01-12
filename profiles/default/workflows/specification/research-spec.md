@@ -92,6 +92,13 @@ Please provide file/folder paths if they exist."
 
 Question 7: [Visual assets question]
 "Do you have any design mockups, wireframes, or screenshots? If yes, please add them to: agent-os/specs/[this-spec]/planning/visuals/"
+
+Question 8: [Impact analysis - for refactoring/modification tasks]
+"If this feature involves changing existing constants, types, or shared code, I need to identify ALL affected areas to avoid missing critical updates:
+- Are there any OTHER packages or modules that define or use the same constants/types?
+- Are there any hardcoded values in the codebase that should be updated?
+- Which areas beyond the obvious ones might be affected? (e.g., background jobs, utilities, tests)
+Please list any areas you know use the affected code."
 ```
 
 **Adapt questions based on previous answers.** If an answer reveals something that changes subsequent questions, adjust accordingly.
@@ -151,6 +158,17 @@ Create `agent-os/specs/[this-spec]/planning/requirements.md` with all gathered i
 ### Existing Code to Reference
 [List of paths/features user identified, or "None identified"]
 
+### Impact Analysis
+[Based on user's response about affected areas - CRITICAL for refactoring tasks]
+
+**Affected Areas Identified:**
+- Package/Module: [Name] - Reason: [why it's affected]
+- Hardcoded values: [locations mentioned by user]
+- Additional areas: [other modules mentioned by user]
+
+[If this is a new feature (not refactoring)]
+No additional impact areas identified - new feature implementation.
+
 ## Visual Assets
 
 ### Files Provided
@@ -206,9 +224,11 @@ Ready for specification creation. Run /write-spec to continue.
 
 - **ALWAYS use `AskUserQuestion` to ask questions one at a time** - never dump all questions at once
 - **Wait for each response** before asking the next question
+- **ALWAYS ask about impact analysis for refactoring tasks** - which other areas use the same constants/types
 - Adapt subsequent questions based on previous answers
 - Always run visual check after all questions are answered
 - Always update spec-meta.json after completing requirements
 - Document the roadmap linkage in requirements.md
+- Document all affected areas mentioned by user for spec-writer's impact analysis
 - Save user's exact answers, not interpretations
 - Keep follow-ups focused and ask them one at a time as well

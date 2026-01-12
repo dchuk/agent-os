@@ -44,6 +44,53 @@ Based on the feature requirements, identify relevant keywords and search for:
 
 Document your findings for use in the specification.
 
+### Step 2.5: Impact Analysis - Find All Affected Code
+
+**CRITICAL:** For refactoring tasks, perform comprehensive impact analysis to find ALL code that will be affected. This is especially important for modifications to shared constants, types, or patterns.
+
+**When to perform:**
+- Modifying shared constants or type definitions
+- Renaming or changing values used across multiple files
+- Refactoring code that may have duplicates in different packages
+- Changing APIs, database schemas, or configuration formats
+
+**How to perform:**
+
+1. **Search for constant/type usages:**
+   ```bash
+   grep -r "CONSTANT_NAME" .
+   ```
+
+2. **Check for duplicate definitions:**
+   ```bash
+   grep -rn "CONSTANT_NAME" . | grep -E "(export|define|const|var|let|=)"
+   ```
+   If duplicates are found, they MUST be consolidated in the spec.
+
+3. **Find hardcoded values:**
+   ```bash
+   grep -rn "'literal_value'" .
+   ```
+
+4. **Identify all packages/modules affected:**
+   ```bash
+   grep -r "CONSTANT_NAME" . | cut -d':' -f1 | xargs -I{} dirname {} | sort -u
+   ```
+
+5. **Find related mappings and transformations:**
+   ```bash
+   grep -rn "mapping\|Mapping\|MAP\|Map" .
+   grep -rn "transform\|Transform\|convert\|Convert" .
+   ```
+   Review results for structures that reference or depend on the values being changed.
+
+**Document findings:**
+- Total files affected (count)
+- Duplicate definitions found (MUST be listed for consolidation)
+- Hardcoded values found (MUST be listed for refactoring)
+- Related mappings/transformations (MUST be reviewed for updates)
+- All packages/modules requiring updates
+
 ### Step 3: Create Core Specification
 
 Write the main specification to `agent-os/specs/[this-spec]/spec.md`.
@@ -98,6 +145,16 @@ Follow this structure exactly:
 
 [Repeat for relevant existing code, max 5]
 
+## Files Requiring Modification
+[For refactoring tasks - list ALL files that need changes based on impact analysis]
+
+### [File/Module Name]
+- **Location:** [file path]
+- **Change needed:** [what must be modified]
+- **Reason:** [why this file is affected]
+
+[Repeat for all affected files. For new features, this section may be minimal or N/A]
+
 ## Out of Scope
 - [Features explicitly excluded]
 - [Future enhancements not for this spec]
@@ -148,9 +205,12 @@ Ready for task breakdown. Run /create-tasks to continue.
 ## Important Constraints
 
 1. **Always search for reusable code** before specifying new components
-2. **Reference visual assets** when available
-3. **Do NOT write actual code** in the spec
-4. **Keep each section short** with clear, scannable specifications
-5. **Do NOT deviate from the template** - no additional sections
-6. **Always update spec-meta.json** after creating spec
-7. **Always verify roadmap linkage** is correct
+2. **Always perform impact analysis** for refactoring tasks - find ALL affected files, not just similar ones
+3. **Check for duplicate definitions** - if the same constant/type exists in multiple packages, flag it for consolidation
+4. **Check for related mappings** - search for lookup tables, transformations, and config objects that depend on the values being changed
+5. **Reference visual assets** when available
+6. **Do NOT write actual code** in the spec
+7. **Keep each section short** with clear, scannable specifications
+8. **Do NOT deviate from the template** - no additional sections
+9. **Always update spec-meta.json** after creating spec
+10. **Always verify roadmap linkage** is correct
