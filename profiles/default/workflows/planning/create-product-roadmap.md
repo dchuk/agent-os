@@ -25,34 +25,12 @@ Order features based on:
 
 Create `agent-os/product/roadmap.json` following the schema at `agent-os/schemas/roadmap.schema.json`.
 
-Use this structure:
+The schema defines all required and optional fields. Key guidance:
 
-```json
-{
-  "schemaVersion": "1.0.0",
-  "productName": "[PRODUCT_NAME from mission.md]",
-  "lastUpdated": "[CURRENT_ISO_TIMESTAMP]",
-  "items": [
-    {
-      "id": "roadmap-001",
-      "title": "[FEATURE_NAME]",
-      "description": "[1-2 SENTENCE DESCRIPTION OF COMPLETE, TESTABLE FEATURE]",
-      "status": "planned",
-      "effort": "[XS|S|M|L|XL]",
-      "priority": 1,
-      "dependencies": [],
-      "specPath": null,
-      "tags": ["[relevant-tags]"],
-      "createdAt": "[CURRENT_ISO_TIMESTAMP]",
-      "speccedAt": null,
-      "startedAt": null,
-      "completedAt": null,
-      "deferredAt": null,
-      "deferredReason": null
-    }
-  ]
-}
-```
+- Set `productName` from mission.md
+- All items start with `status: "planned"`
+- Set `specPath` to null initially (updated when spec is created)
+- Use ISO 8601 timestamps for all date fields
 
 ### Effort Scale Reference
 

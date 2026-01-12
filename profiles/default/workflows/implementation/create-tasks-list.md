@@ -63,98 +63,39 @@ Use your learnings to inform the tasks list and groupings.
 
 Generate `agent-os/specs/[this-spec]/tasks.json` following the schema at `agent-os/schemas/tasks.schema.json`.
 
-```json
-{
-  "schemaVersion": "1.0.0",
-  "specId": "[SPEC_FOLDER_NAME]",
-  "specTitle": "[FEATURE_NAME from spec.md]",
-  "roadmapItemId": "[FROM spec-meta.json or null]",
-  "createdAt": "[CURRENT_ISO_TIMESTAMP]",
-  "lastUpdated": "[CURRENT_ISO_TIMESTAMP]",
-  "status": "pending",
-  "summary": {
-    "totalTaskGroups": 0,
-    "completedTaskGroups": 0,
-    "totalTasks": 0,
-    "completedTasks": 0
-  },
-  "taskGroups": []
-}
-```
+The schema defines all required and optional fields. Key guidance:
+
+- Set `specId` to the spec folder name (e.g., `2025-01-10-user-auth`)
+- Set `roadmapItemId` from spec-meta.json (or null if not linked)
+- All new items start with `status: "pending"`
+- Use ISO 8601 timestamps for all date fields
 
 ### Step 3: Populate Task Groups
 
-For each logical grouping of work, create a task group:
+For each logical grouping of work, create a task group following the `taskGroup` definition in the schema.
 
-```json
-{
-  "id": "tg-001",
-  "name": "Database Layer",
-  "layer": "database",
-  "description": "Create data models and migrations for [feature]",
-  "dependencies": [],
-  "status": "pending",
-  "assignedAgent": null,
-  "acceptanceCriteria": [
-    "Models pass validation tests",
-    "Migrations run successfully",
-    "Associations work correctly"
-  ],
-  "startedAt": null,
-  "completedAt": null,
-  "tasks": []
-}
-```
+Key guidance for task groups:
+- Use descriptive names like "Database Layer" or "User Authentication API"
+- Set the appropriate `layer` value (see Layer Types below)
+- Include 3-5 `acceptanceCriteria` that define completion
+- Leave `assignedAgent` as null (used during orchestration)
 
 ### Step 4: Populate Tasks and Subtasks
 
-For each task within a group:
+For each task within a group, follow the `task` and `subtask` definitions in the schema.
 
-```json
-{
-  "id": "task-001",
-  "title": "Create User model with validations",
-  "status": "pending",
-  "notes": null,
-  "subtasks": [
-    {
-      "id": "subtask-001",
-      "title": "Write 2-8 focused tests for User model",
-      "status": "pending",
-      "details": [
-        "Test primary validation rules",
-        "Test key associations",
-        "Skip exhaustive edge case coverage"
-      ],
-      "notes": null
-    },
-    {
-      "id": "subtask-002",
-      "title": "Implement User model",
-      "status": "pending",
-      "details": [
-        "Fields: email, name, created_at, updated_at",
-        "Validations: email format, name presence",
-        "Reuse pattern from existing models"
-      ],
-      "notes": null
-    }
-  ]
-}
-```
+Key guidance for tasks:
+- Make titles action-oriented: "Create User model with validations"
+- Use `details` array in subtasks for specific implementation points
+- Leave `notes` as null initially (populated during implementation)
 
 ### Step 5: Update Summary Statistics
 
-After populating all task groups, calculate and update the `summary` object:
-
-```json
-"summary": {
-  "totalTaskGroups": [COUNT_OF_TASK_GROUPS],
-  "completedTaskGroups": 0,
-  "totalTasks": [COUNT_OF_ALL_TASKS_ACROSS_GROUPS],
-  "completedTasks": 0
-}
-```
+After populating all task groups, calculate the `summary` object:
+- `totalTaskGroups`: Count of all task groups
+- `completedTaskGroups`: 0 (initial)
+- `totalTasks`: Count of all tasks across all groups
+- `completedTasks`: 0 (initial)
 
 ### Step 6: Update spec-meta.json
 

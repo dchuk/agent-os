@@ -67,33 +67,17 @@ echo "Created spec folder: $SPEC_PATH"
 
 ### Step 4: Create spec-meta.json
 
-Create the metadata file at `$SPEC_PATH/spec-meta.json`:
+Create the metadata file at `$SPEC_PATH/spec-meta.json` following the schema at `agent-os/schemas/spec-meta.schema.json`.
 
-```json
-{
-  "schemaVersion": "1.0.0",
-  "specId": "[DATED_SPEC_NAME]",
-  "title": "[FEATURE_TITLE]",
-  "roadmapItemId": "[ROADMAP_ITEM_ID or null]",
-  "status": "drafting",
-  "createdAt": "[CURRENT_ISO_TIMESTAMP]",
-  "shapedAt": null,
-  "speccedAt": null,
-  "taskedAt": null,
-  "implementationStartedAt": null,
-  "completedAt": null,
-  "abandonedAt": null,
-  "abandonedReason": null,
-  "files": {
-    "hasRequirements": false,
-    "hasSpec": false,
-    "hasTasks": false,
-    "hasVisuals": false,
-    "visualCount": 0
-  },
-  "findingsGenerated": []
-}
-```
+The schema defines all required and optional fields. Key guidance:
+
+- Set `specId` to the dated folder name (e.g., `2025-01-10-user-auth`)
+- Set `roadmapItemId` to the linked roadmap item ID or null
+- Set initial `status` to `"drafting"`
+- Set `createdAt` to current ISO 8601 timestamp
+- All other timestamp fields start as null
+- All `files` tracking fields start as false/0
+- `findingsGenerated` starts as empty array
 
 ### Step 5: Update roadmap.json
 

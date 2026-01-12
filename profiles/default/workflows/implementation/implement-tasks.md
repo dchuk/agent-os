@@ -96,32 +96,13 @@ Update `roadmap.json`:
 
 After completing implementation (whether partial or full), capture any findings discovered:
 
-1. Read `agent-os/product/findings.json` (create if doesn't exist)
-2. For each finding worth capturing:
-
-```json
-{
-  "id": "finding-[NEXT_NUMBER]",
-  "category": "[appropriate-category]",
-  "title": "[Short descriptive title]",
-  "description": "[Detailed explanation]",
-  "context": "[When/where this applies]",
-  "recommendation": "[Actionable guidance]",
-  "codeExample": "[Optional code snippet]",
-  "antiPattern": "[Optional what NOT to do]",
-  "relatedFiles": ["[relevant/file/paths]"],
-  "sourceSpec": "[this-spec-id]",
-  "discoveredAt": "[CURRENT_ISO_TIMESTAMP]",
-  "lastConfirmedAt": "[CURRENT_ISO_TIMESTAMP]",
-  "confirmedCount": 1,
-  "confidence": "[low|medium|high]",
-  "status": "active",
-  "supersededBy": null,
-  "archivedAt": null,
-  "archivedReason": null
-}
-```
-
+1. Read `agent-os/product/findings.json` (create if doesn't exist following `agent-os/schemas/findings.schema.json`)
+2. For each finding worth capturing, create a new finding object following the schema. Key guidance:
+   - Use next sequential ID: `finding-001`, `finding-002`, etc.
+   - Set appropriate `category` (see Finding Categories below)
+   - Include actionable `recommendation`
+   - Set `sourceSpec` to current spec ID
+   - Set `confidence` based on how often you've seen this pattern
 3. Before adding a new finding, check if a similar one exists:
    - If yes and still valid: increment `confirmedCount`, update `lastConfirmedAt`
    - If yes but needs updating: update the existing finding
