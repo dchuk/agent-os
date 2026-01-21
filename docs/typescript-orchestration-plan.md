@@ -1673,6 +1673,298 @@ const wavePool = new WavePool({
 
 ---
 
+## Batch Flow with Checkpoints
+
+This section details the "Funnel with Checkpoints" workflow that maximizes parallelism while maintaining coordination through explicit alignment reviews.
+
+### Design Philosophy
+
+**Key principles:**
+1. **Human input is front-loaded** - All creative/judgment work happens upfront with full context
+2. **Parallelism where safe** - Spec writing and task creation are independent once inputs gathered
+3. **Explicit checkpoints** - Two alignment reviews catch drift before it compounds
+4. **Risk-based autonomy** - Agent doesn't interrupt for trivial fixes during execution
+
+### Complete Workflow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     BATCH FLOW WITH CHECKPOINTS                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │ PHASE 1: SHAPING (Sequential)                                    │   │
+│  │ ─────────────────────────────────────────────────────────────── │   │
+│  │ User answers Q&A for each roadmap item in order.                 │   │
+│  │ Human judgment preserved. Context accumulates.                   │   │
+│  │                                                                  │   │
+│  │   ┌──────┐     ┌──────┐     ┌──────┐     ┌──────┐              │   │
+│  │   │ Q&A  │ ──▶ │ Q&A  │ ──▶ │ Q&A  │ ──▶ │ Q&A  │              │   │
+│  │   │Item 1│     │Item 2│     │Item 3│     │Item N│              │   │
+│  │   └──────┘     └──────┘     └──────┘     └──────┘              │   │
+│  │                                                                  │   │
+│  │   Optimization: Group related items to reduce repetitive Qs     │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                  │                                      │
+│                                  ▼                                      │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │ PHASE 2: SPEC WRITING (Parallel)                                 │   │
+│  │ ─────────────────────────────────────────────────────────────── │   │
+│  │ All specs written simultaneously. Each has full shaped context.  │   │
+│  │                                                                  │   │
+│  │   ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐                       │   │
+│  │   │Write │  │Write │  │Write │  │Write │                       │   │
+│  │   │Spec 1│  │Spec 2│  │Spec 3│  │Spec N│                       │   │
+│  │   └──────┘  └──────┘  └──────┘  └──────┘                       │   │
+│  │       │         │         │         │                           │   │
+│  │       └─────────┴─────────┴─────────┘                           │   │
+│  │                     │                                            │   │
+│  └─────────────────────│────────────────────────────────────────────┘   │
+│                        ▼                                                │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │ CHECKPOINT 1: SPEC ALIGNMENT REVIEW                              │   │
+│  │ ─────────────────────────────────────────────────────────────── │   │
+│  │ Agent compares ALL specs. Identifies conflicts and drift.        │   │
+│  │ User reviews findings and approves/adjusts.                      │   │
+│  │                                                                  │   │
+│  │   Alignment Agent checks:                                        │   │
+│  │   ├─ Naming conflicts?                                           │   │
+│  │   ├─ API inconsistencies?                                        │   │
+│  │   ├─ Data model drift?                                           │   │
+│  │   ├─ Shared component divergence?                                │   │
+│  │   ├─ Dependency ordering issues?                                 │   │
+│  │   └─ Scope overlap/duplication?                                  │   │
+│  │                                                                  │   │
+│  │   User reviews → Agent applies approved changes + cascade check  │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                  │                                      │
+│                                  ▼                                      │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │ PHASE 3: TASK CREATION (Parallel)                                │   │
+│  │ ─────────────────────────────────────────────────────────────── │   │
+│  │ All task lists created simultaneously from aligned specs.        │   │
+│  │                                                                  │   │
+│  │   ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐                       │   │
+│  │   │Tasks │  │Tasks │  │Tasks │  │Tasks │                       │   │
+│  │   │Spec 1│  │Spec 2│  │Spec 3│  │Spec N│                       │   │
+│  │   └──────┘  └──────┘  └──────┘  └──────┘                       │   │
+│  │       │         │         │         │                           │   │
+│  │       └─────────┴─────────┴─────────┘                           │   │
+│  │                     │                                            │   │
+│  └─────────────────────│────────────────────────────────────────────┘   │
+│                        ▼                                                │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │ CHECKPOINT 2: TASK ALIGNMENT REVIEW                              │   │
+│  │ ─────────────────────────────────────────────────────────────── │   │
+│  │ Agent compares ALL task lists. Validates ordering & deps.        │   │
+│  │ User reviews findings and approves/adjusts.                      │   │
+│  │                                                                  │   │
+│  │   Alignment Agent checks:                                        │   │
+│  │   ├─ Cross-spec task dependencies correct?                       │   │
+│  │   ├─ Shared infrastructure tasks deduplicated?                   │   │
+│  │   ├─ Execution order respects dependencies?                      │   │
+│  │   ├─ Integration points identified?                              │   │
+│  │   └─ Effort estimates reasonable?                                │   │
+│  │                                                                  │   │
+│  │   User reviews → Agent applies approved changes + cascade check  │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                  │                                      │
+│                                  ▼                                      │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │ PHASE 4: EXECUTION (Sequential with Smart Alignment)             │   │
+│  │ ─────────────────────────────────────────────────────────────── │   │
+│  │ Execute specs in dependency order. Monitor for drift.            │   │
+│  │ Risk-based autonomy: agent resolves low-risk, escalates high.    │   │
+│  │                                                                  │   │
+│  │   FOR each spec in dependency order:                             │   │
+│  │   ┌──────────────────────────────────────────────────────────┐  │   │
+│  │   │  Execute task groups                                      │  │   │
+│  │   │       │                                                   │  │   │
+│  │   │       ▼                                                   │  │   │
+│  │   │  Drift detected?                                          │  │   │
+│  │   │       │                                                   │  │   │
+│  │   │       ├─▶ LOW RISK ──▶ Agent resolves, logs decision     │  │   │
+│  │   │       │                                                   │  │   │
+│  │   │       ├─▶ MEDIUM ────▶ Agent resolves, notifies after    │  │   │
+│  │   │       │                                                   │  │   │
+│  │   │       └─▶ HIGH RISK ─▶ STOP, ask user for direction      │  │   │
+│  │   │                                                           │  │   │
+│  │   │  Update downstream specs/tasks if needed                  │  │   │
+│  │   │  Capture findings                                         │  │   │
+│  │   │  Mark spec complete                                       │  │   │
+│  │   └──────────────────────────────────────────────────────────┘  │   │
+│  │                                                                  │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Phase Summary
+
+| Phase | Mode | Purpose |
+|-------|------|---------|
+| 1. Shaping | Sequential | Preserve human judgment, accumulate context |
+| 2. Spec Writing | Parallel | Efficiency - all specs written at once |
+| Checkpoint 1 | Alignment Review | Catch conflicts before task creation |
+| 3. Task Creation | Parallel | Efficiency - all tasks created at once |
+| Checkpoint 2 | Alignment Review | Validate cross-spec dependencies |
+| 4. Execution | Sequential | Risk-based autonomy, smart drift handling |
+
+### Checkpoint 1: Spec Alignment Review
+
+The alignment agent checks all specs for:
+
+| Category | What to Check | Example Issue |
+|----------|---------------|---------------|
+| **Naming Conflicts** | Same name, different meaning | Two specs define `UserProfile` model differently |
+| **API Inconsistency** | Incompatible interfaces | Spec A: `GET /users/:id`, Spec B: `GET /user/:id` |
+| **Data Model Drift** | Schema conflicts | Spec A: `user.email` (string), Spec B: `user.emails` (array) |
+| **Shared Components** | Same component, different APIs | Both use `<Button>` but expect different props |
+| **Dependency Ordering** | Wrong sequence declared | Spec B depends on A but roadmap doesn't reflect |
+| **Scope Overlap** | Duplicate work | Both specs implement user notifications |
+
+### Checkpoint 2: Task Alignment Review
+
+The alignment agent checks all task lists for:
+
+| Category | What to Check | Example Issue |
+|----------|---------------|---------------|
+| **Cross-Spec Dependencies** | Task A needs Task B from different spec | Spec 2 Task 3 needs Spec 1 Task 5 complete first |
+| **Infrastructure Deduplication** | Same setup in multiple specs | Multiple specs create "setup database" task |
+| **Execution Order** | Respects roadmap dependencies | Spec B tasks scheduled before Spec A completes |
+| **Integration Points** | Where specs connect | API consumer tasks align with API provider tasks |
+| **Effort Sanity** | Reasonable estimates | One spec has 50 XL tasks, another has 2 XS |
+
+### Risk Classification for Drift Resolution
+
+During execution, drift is classified by risk level:
+
+| Risk Level | Criteria | Agent Action |
+|------------|----------|--------------|
+| **Low** | Naming/formatting only, no behavior change | Resolve silently, log decision |
+| **Low** | Additive change (new optional field/param) | Resolve silently, log decision |
+| **Medium** | Changes affect current spec only | Resolve, notify user after completion |
+| **Medium** | Minor deviation from spec (same intent) | Resolve, notify user after completion |
+| **High** | Changes affect multiple specs | STOP, ask user before proceeding |
+| **High** | Changes to core abstractions (auth, data layer) | STOP, ask user before proceeding |
+| **High** | Contradicts explicit user decision from shaping | STOP, ask user before proceeding |
+| **Critical** | Security implications | STOP, ask user before proceeding |
+
+### Drift Detection Triggers
+
+The orchestrator monitors for drift during execution:
+
+- Implementation creates different API than spec described
+- New dependency discovered not in tasks.json
+- Task cannot be completed as specified
+- Test failures reveal spec assumption was wrong
+- Downstream task references something that doesn't exist
+
+### Alignment Schema Additions
+
+#### Addition to `spec-meta.schema.json`:
+
+```json
+{
+  "alignmentStatus": {
+    "type": "string",
+    "enum": ["pending", "reviewed", "approved", "needs-revision"],
+    "description": "Status of cross-spec alignment review"
+  },
+  "alignmentReviewedAt": {
+    "type": "string",
+    "format": "date-time",
+    "description": "When alignment was last reviewed"
+  },
+  "alignmentNotes": {
+    "type": "array",
+    "items": { "type": "string" },
+    "description": "Notes from alignment review"
+  },
+  "relatedSpecs": {
+    "type": "array",
+    "items": { "type": "string" },
+    "description": "Other spec IDs this spec has dependencies or conflicts with"
+  }
+}
+```
+
+#### Addition to `tasks.schema.json`:
+
+```json
+{
+  "crossSpecDependencies": {
+    "type": "array",
+    "items": {
+      "type": "object",
+      "properties": {
+        "specId": { "type": "string" },
+        "taskGroupId": { "type": "string" },
+        "taskId": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["blocks", "blocked-by", "related"]
+        }
+      }
+    },
+    "description": "Tasks in other specs that this task depends on or blocks"
+  }
+}
+```
+
+#### New file: `alignment-report.schema.json`:
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Alignment Report",
+  "type": "object",
+  "properties": {
+    "reportId": { "type": "string" },
+    "reportType": {
+      "type": "string",
+      "enum": ["spec-alignment", "task-alignment", "execution-drift"]
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "specsReviewed": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+          "category": { "type": "string" },
+          "description": { "type": "string" },
+          "specsAffected": { "type": "array", "items": { "type": "string" } },
+          "recommendation": { "type": "string" },
+          "userDecision": {
+            "type": "string",
+            "enum": ["pending", "approved", "rejected", "modified"]
+          },
+          "userNotes": { "type": "string" },
+          "resolvedAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "executionOrder": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Recommended spec execution order"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending-review", "approved", "changes-applied"]
+    }
+  }
+}
+```
+
+---
+
 ## Detailed Design
 
 ### 1. Profile Installation
