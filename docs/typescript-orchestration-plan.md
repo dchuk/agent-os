@@ -1,25 +1,27 @@
-# TypeScript Orchestration System for Agent OS
+# TypeScript Orchestration System for WavePool
 
 **Date:** 2026-01-21
 **Status:** Proposal
-**Version:** 1.1.0
+**Version:** 1.2.0
 
 ---
 
 ## Executive Summary
 
-This plan outlines converting Agent OS from a pure markdown/YAML documentation system into a **TypeScript-based orchestration layer** that uses the [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript) to programmatically drive Claude Code. The key innovations are:
+This plan outlines converting WavePool from a pure markdown/YAML documentation system into a **TypeScript-based orchestration layer** that uses the [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript) to programmatically drive Claude Code. The key innovations are:
 
 1. **TypeScript handles orchestration** - Batching, lifecycle management, and task execution happen in TypeScript, not Claude Code slash commands
 2. **Fresh sessions per task group** - Implements the [Ralph Wiggum strategy](https://github.com/frankbria/ralph-claude-code) where each task group executes in a clean context window
 3. **Prompt templates in TypeScript** - Commands like `/write-spec` become prompt templates stored in the TypeScript project and sent via the Agent SDK
 4. **Skills/Agents as project files** - Claude Code reads skill/agent definitions from the target project's `.claude/` directory for behavioral guidance during execution
+5. **Flexible interaction modes** - Questions can be delivered one-by-one (CLI) or batched as JSON (web/app wizards), with per-phase autonomy settings
+6. **Decision logging** - All decisions (user or AI-made) are logged with artifact references for auditability
 
 ---
 
 ## Dual-Target Architecture: SDK + CLI
 
-Agent OS is designed as a **layered system** that supports two primary consumption patterns:
+WavePool is designed as a **layered system** that supports two primary consumption patterns:
 
 1. **Embeddable SDK** - A programmatic TypeScript library for integration into Electron apps, web applications, VS Code extensions, and other host environments
 2. **Executable CLI** - A command-line interface built on top of the SDK for terminal-based workflows
@@ -42,7 +44,7 @@ Agent OS is designed as a **layered system** that supports two primary consumpti
 │                                 │                                        │
 │                                 ▼                                        │
 │   ┌─────────────────────────────────────────────────────────────────┐   │
-│   │                      @agent-os/sdk (Core)                        │   │
+│   │                      @wavepool/sdk (Core)                        │   │
 │   │   Orchestrator • SessionManager • StateManager • BatchProcessor  │   │
 │   │   PromptBuilder • LifecyclePhases • EventEmitter                 │   │
 │   └─────────────────────────────┬───────────────────────────────────┘   │
@@ -132,12 +134,12 @@ Agent OS is designed as a **layered system** that supports two primary consumpti
 The project is organized as a monorepo with separate packages for SDK and CLI:
 
 ```
-agent-os/
+wavepool/
 ├── packages/
-│   ├── sdk/                          # @agent-os/sdk - Core library
+│   ├── sdk/                          # @wavepool/sdk - Core library
 │   │   ├── src/
 │   │   │   ├── index.ts              # Public API exports
-│   │   │   ├── AgentOS.ts            # Main entry point class
+│   │   │   ├── WavePool.ts            # Main entry point class
 │   │   │   ├── orchestrator/
 │   │   │   │   ├── Orchestrator.ts   # Main orchestration engine
 │   │   │   │   ├── SessionManager.ts # Spawns/manages Claude sessions
@@ -168,7 +170,7 @@ agent-os/
 │   │   ├── package.json
 │   │   └── tsconfig.json
 │   │
-│   └── cli/                          # @agent-os/cli - Command-line interface
+│   └── cli/                          # @wavepool/cli - Command-line interface
 │       ├── src/
 │       │   ├── index.ts              # CLI entry point
 │       │   ├── commands/
@@ -184,7 +186,7 @@ agent-os/
 │       │   │   └── Table.ts
 │       │   └── adapters/
 │       │       └── TerminalUIAdapter.ts
-│       ├── package.json              # Depends on @agent-os/sdk
+│       ├── package.json              # Depends on @wavepool/sdk
 │       └── tsconfig.json
 │
 ├── profiles/                         # Profile definitions (shared)
@@ -198,7 +200,7 @@ agent-os/
 ### System Components (Legacy Reference)
 
 ```
-agent-os/
+wavepool/
 ├── src/                           # TypeScript orchestration layer
 │   ├── index.ts                   # CLI entry point
 │   ├── orchestrator/
@@ -253,14 +255,15 @@ target-project/
 │   │   ├── spec-writer.md         # Behavioral guidance for spec writing
 │   │   └── ...
 │   └── settings.json              # Claude Code configuration
-├── agent-os/
+├── wavepool/
 │   ├── product/                   # State files
 │   │   ├── roadmap.json
 │   │   ├── mission.md
-│   │   └── findings.json
+│   │   ├── findings.json
+│   │   └── decisions_log.json     # Decision audit trail
 │   ├── specs/                     # Spec directories
 │   └── standards/                 # Coding standards (referenced by agents)
-└── agent-os.config.json           # Orchestrator configuration
+└── wavepool.config.json           # Orchestrator configuration
 ```
 
 ### Key Distinction: Prompt Templates vs Agent Files
@@ -269,7 +272,7 @@ target-project/
 |-----------|----------|---------|---------|
 | **Prompt Templates** | `src/prompts/templates/` | Commands sent to Claude via SDK | TypeScript Orchestrator |
 | **Agent Files** | `.claude/agents/` in target project | Behavioral guidance during execution | Claude Code |
-| **Standards** | `agent-os/standards/` in target project | Coding standards referenced by agents | Claude Code |
+| **Standards** | `wavepool/standards/` in target project | Coding standards referenced by agents | Claude Code |
 | **Workflows** | Referenced in prompt templates | Step-by-step procedures | Embedded in prompts |
 
 ### The Ralph Wiggum Pattern in TypeScript
@@ -318,32 +321,32 @@ class SessionManager {
 
 ## SDK Design
 
-### Main Entry Point: AgentOS Class
+### Main Entry Point: WavePool Class
 
 The SDK exposes a single primary entry point that orchestrates all functionality:
 
 ```typescript
-// packages/sdk/src/AgentOS.ts
+// packages/sdk/src/WavePool.ts
 
 import { EventEmitter } from './events/EventEmitter';
 import { Orchestrator } from './orchestrator/Orchestrator';
-import type { AgentOSConfig, Adapters, AgentOSEvents } from './types';
+import type { WavePoolConfig, Adapters, WavePoolEvents } from './types';
 
 /**
- * Main entry point for the Agent OS SDK.
+ * Main entry point for the WavePool SDK.
  *
  * @example
  * // Basic usage
- * const agentOS = new AgentOS({
+ * const wavePool = new WavePool({
  *   projectDir: '/path/to/project',
  *   profile: 'default',
  * });
  *
- * await agentOS.execute();
+ * await wavePool.execute();
  *
  * @example
  * // With custom adapters (for Electron/Web)
- * const agentOS = new AgentOS({
+ * const wavePool = new WavePool({
  *   projectDir: '/path/to/project',
  *   adapters: {
  *     fileSystem: new ElectronFileSystemAdapter(),
@@ -352,11 +355,11 @@ import type { AgentOSConfig, Adapters, AgentOSEvents } from './types';
  *   }
  * });
  */
-export class AgentOS extends EventEmitter<AgentOSEvents> {
+export class WavePool extends EventEmitter<WavePoolEvents> {
   private orchestrator: Orchestrator;
-  private config: AgentOSConfig;
+  private config: WavePoolConfig;
 
-  constructor(config: AgentOSConfig) {
+  constructor(config: WavePoolConfig) {
     super();
     this.config = this.resolveConfig(config);
     this.orchestrator = new Orchestrator(this.config, this);
@@ -469,7 +472,7 @@ The SDK uses a typed event emitter for all progress and status updates, enabling
 ```typescript
 // packages/sdk/src/events/types.ts
 
-export interface AgentOSEvents {
+export interface WavePoolEvents {
   // Lifecycle events
   'execute:start': { options?: ExecuteOptions };
   'execute:complete': { result: ExecutionResult };
@@ -510,18 +513,31 @@ export interface AgentOSEvents {
 
   // Profile events
   'profile:installed': { profile: string };
+
+  // Decision logging events
+  'decision:logged': { decision: Decision };
+  'decision:user-answered': { decision: Decision };
+  'decision:ai-decided': { decision: Decision };
+
+  // Batch question events (for wizard-style UIs)
+  'questions:batch': {
+    phase: Phase;
+    questions: Question[];
+    resolve: (answers: Answer[]) => void;
+    reject: (reason: string) => void;
+  };
 }
 
 // Usage example in host application:
-agentOS.on('session:start', ({ sessionId, task }) => {
+wavePool.on('session:start', ({ sessionId, task }) => {
   ui.showSpinner(`Starting: ${task.name}`);
 });
 
-agentOS.on('batch:progress', ({ completed, total }) => {
+wavePool.on('batch:progress', ({ completed, total }) => {
   ui.updateProgressBar(completed / total);
 });
 
-agentOS.on('interaction:required', async ({ type, prompt, options, resolve }) => {
+wavePool.on('interaction:required', async ({ type, prompt, options, resolve }) => {
   const answer = await ui.showDialog(type, prompt, options);
   resolve(answer);
 });
@@ -620,13 +636,13 @@ export interface UIAdapter {
 /**
  * Configuration for the SDK.
  */
-export interface AgentOSConfig {
+export interface WavePoolConfig {
   // Required
   projectDir: string;
 
   // Optional - defaults provided
   profile?: string;
-  configPath?: string;  // Path to agent-os.config.json
+  configPath?: string;  // Path to wavepool.config.json
 
   // Orchestration settings
   orchestration?: {
@@ -645,9 +661,61 @@ export interface AgentOSConfig {
     alignment?: string;
   };
 
+  /**
+   * Interaction mode configuration.
+   * Controls how questions are delivered to the user.
+   */
+  interaction?: {
+    /**
+     * How to deliver questions to the user:
+     * - 'sequential': One question at a time (better for CLI)
+     * - 'batch': All questions at once as JSON array (better for web/app wizards)
+     */
+    questionDeliveryMode: 'sequential' | 'batch';
+  };
+
+  /**
+   * Per-phase autonomy settings.
+   * Controls whether the AI should ask the user or decide autonomously.
+   */
+  autonomy?: {
+    /**
+     * Planning phase: roadmap creation questions
+     */
+    planning?: AutonomyMode;
+    /**
+     * Shaping phase: requirements gathering Q&A
+     */
+    shaping?: AutonomyMode;
+    /**
+     * Spec writing phase: technical decisions
+     */
+    specWriting?: AutonomyMode;
+    /**
+     * Task creation phase: implementation approach
+     */
+    taskCreation?: AutonomyMode;
+    /**
+     * Alignment review phases: conflict resolution
+     */
+    alignment?: AutonomyMode;
+    /**
+     * Implementation phase: runtime decisions
+     */
+    implementation?: AutonomyMode;
+  };
+
   // Custom adapters (optional - defaults used if not provided)
   adapters?: Partial<Adapters>;
 }
+
+/**
+ * Autonomy mode for each phase.
+ * - 'ask': Always stop and ask the user
+ * - 'autonomous': AI decides on its own and logs the decision
+ * - 'autonomous-low-risk': AI decides for low-risk items, asks for high-risk
+ */
+export type AutonomyMode = 'ask' | 'autonomous' | 'autonomous-low-risk';
 
 export interface Adapters {
   fileSystem: FileSystemAdapter;
@@ -657,6 +725,310 @@ export interface Adapters {
 }
 ```
 
+### Interaction Modes
+
+WavePool supports two question delivery modes to accommodate different UI paradigms:
+
+#### Sequential Mode (CLI-Friendly)
+
+Questions are delivered one at a time, ideal for terminal-based workflows:
+
+```typescript
+// Sequential mode - questions come one by one
+const wavePool = new WavePool({
+  projectDir: '/path/to/project',
+  interaction: {
+    questionDeliveryMode: 'sequential',
+  },
+});
+
+// Each question triggers a separate event
+wavePool.on('interaction:required', async ({ type, prompt, resolve }) => {
+  const answer = await terminalPrompt(prompt);
+  resolve(answer);
+});
+```
+
+#### Batch Mode (Wizard-Friendly)
+
+All questions for a phase are collected and delivered at once as a JSON array, ideal for web/app wizard UIs:
+
+```typescript
+// Batch mode - questions come as a collection
+const wavePool = new WavePool({
+  projectDir: '/path/to/project',
+  interaction: {
+    questionDeliveryMode: 'batch',
+  },
+});
+
+// All questions for a phase arrive together
+wavePool.on('questions:batch', async ({ phase, questions, resolve }) => {
+  // questions is an array like:
+  // [
+  //   { id: 'q1', prompt: 'What auth method?', type: 'choice', options: [...] },
+  //   { id: 'q2', prompt: 'Support MFA?', type: 'boolean' },
+  //   { id: 'q3', prompt: 'Session timeout?', type: 'text', default: '30m' },
+  // ]
+
+  // Display all questions in a wizard UI, collect answers
+  const answers = await showWizardDialog(phase, questions);
+
+  // answers is an array like:
+  // [
+  //   { questionId: 'q1', answer: 'JWT with refresh tokens' },
+  //   { questionId: 'q2', answer: true },
+  //   { questionId: 'q3', answer: '1h' },
+  // ]
+  resolve(answers);
+});
+```
+
+#### Question and Answer Types
+
+```typescript
+// packages/sdk/src/types/interaction.ts
+
+export interface Question {
+  id: string;
+  prompt: string;
+  type: 'text' | 'choice' | 'multi-choice' | 'boolean' | 'number';
+  options?: string[];        // For choice/multi-choice
+  default?: any;             // Default value
+  required?: boolean;        // Whether answer is required
+  category?: string;         // Grouping hint for UI
+  context?: string;          // Additional context/help text
+  relatedArtifact?: {        // What this question relates to
+    type: 'roadmap-item' | 'spec' | 'task' | 'finding';
+    id: string;
+    path?: string;
+  };
+}
+
+export interface Answer {
+  questionId: string;
+  answer: any;
+  answeredBy: 'user' | 'ai';
+  confidence?: number;       // AI confidence (0-1) when AI answers
+  reasoning?: string;        // AI reasoning when AI answers
+}
+```
+
+### Per-Phase Autonomy
+
+Control whether the AI should ask the user or decide autonomously for each workflow phase:
+
+```typescript
+const wavePool = new WavePool({
+  projectDir: '/path/to/project',
+  autonomy: {
+    // User answers all requirements questions
+    shaping: 'ask',
+
+    // User answers spec writing questions
+    specWriting: 'ask',
+
+    // AI decides on task breakdown autonomously
+    taskCreation: 'autonomous',
+
+    // AI handles alignment reviews autonomously
+    alignment: 'autonomous',
+
+    // AI decides low-risk implementation questions, asks for high-risk
+    implementation: 'autonomous-low-risk',
+  },
+});
+```
+
+| Mode | Behavior |
+|------|----------|
+| `'ask'` | Always stop and wait for user input |
+| `'autonomous'` | AI decides and logs the decision for later review |
+| `'autonomous-low-risk'` | AI decides for low-severity items, asks for high-severity |
+
+### Decision Logging
+
+All decisions—whether made by the user or AI—are logged to `wavepool/product/decisions_log.json` for auditability and review.
+
+#### Decision Log Structure
+
+```typescript
+// packages/sdk/src/types/decision.ts
+
+export interface Decision {
+  id: string;                           // Unique decision ID
+  timestamp: string;                    // ISO timestamp
+  phase: Phase;                         // Which workflow phase
+
+  // The question that prompted this decision
+  question: {
+    id: string;
+    prompt: string;
+    options?: string[];
+  };
+
+  // The answer/decision made
+  answer: {
+    value: any;
+    answeredBy: 'user' | 'ai';
+    confidence?: number;                // AI confidence (0-1)
+    reasoning?: string;                 // AI's reasoning if autonomous
+  };
+
+  // What artifact this decision relates to
+  relatedArtifact: {
+    type: 'roadmap-item' | 'spec' | 'task' | 'task-group' | 'finding' | 'alignment';
+    id: string;
+    title?: string;
+    path?: string;                      // File path if applicable
+  };
+
+  // Impact tracking
+  impact?: {
+    filesAffected?: string[];           // Files this decision influenced
+    dependentDecisions?: string[];      // Other decisions that depend on this
+  };
+
+  // Review status
+  reviewed?: boolean;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  reviewNotes?: string;
+}
+
+export interface DecisionsLog {
+  version: string;
+  projectId: string;
+  lastUpdated: string;
+  decisions: Decision[];
+
+  // Summary statistics
+  stats: {
+    totalDecisions: number;
+    userDecisions: number;
+    aiDecisions: number;
+    pendingReview: number;
+    byPhase: Record<Phase, number>;
+  };
+}
+```
+
+#### Example decisions_log.json
+
+```json
+{
+  "version": "1.0.0",
+  "projectId": "my-app",
+  "lastUpdated": "2026-01-21T14:30:00Z",
+  "decisions": [
+    {
+      "id": "dec-001",
+      "timestamp": "2026-01-21T10:15:00Z",
+      "phase": "shaping",
+      "question": {
+        "id": "auth-method",
+        "prompt": "What authentication methods should be supported?",
+        "options": ["Session-based", "JWT", "OAuth only", "JWT + OAuth"]
+      },
+      "answer": {
+        "value": "JWT + OAuth",
+        "answeredBy": "user"
+      },
+      "relatedArtifact": {
+        "type": "spec",
+        "id": "2026-01-21-auth",
+        "title": "User Authentication",
+        "path": "wavepool/specs/2026-01-21-auth/spec.md"
+      },
+      "reviewed": false
+    },
+    {
+      "id": "dec-002",
+      "timestamp": "2026-01-21T12:30:00Z",
+      "phase": "alignment",
+      "question": {
+        "id": "naming-conflict",
+        "prompt": "Specs use inconsistent naming: 'userId' vs 'user_id'. Which should be standard?"
+      },
+      "answer": {
+        "value": "userId",
+        "answeredBy": "ai",
+        "confidence": 0.92,
+        "reasoning": "The codebase uses camelCase for JavaScript/TypeScript. 'userId' aligns with existing patterns in src/types/user.ts and the API response format."
+      },
+      "relatedArtifact": {
+        "type": "alignment",
+        "id": "align-001",
+        "title": "Cross-spec naming consistency"
+      },
+      "impact": {
+        "filesAffected": [
+          "wavepool/specs/2026-01-21-auth/spec.md",
+          "wavepool/specs/2026-01-21-profiles/spec.md"
+        ]
+      },
+      "reviewed": false
+    }
+  ],
+  "stats": {
+    "totalDecisions": 2,
+    "userDecisions": 1,
+    "aiDecisions": 1,
+    "pendingReview": 2,
+    "byPhase": {
+      "shaping": 1,
+      "alignment": 1
+    }
+  }
+}
+```
+
+#### Decision Log SDK Methods
+
+```typescript
+// Access decision log through SDK
+const decisions = await wavePool.getDecisions({
+  phase: 'alignment',           // Filter by phase
+  answeredBy: 'ai',             // Filter by who answered
+  reviewed: false,              // Filter by review status
+  artifactId: '2026-01-21-auth' // Filter by related artifact
+});
+
+// Mark decisions as reviewed
+await wavePool.reviewDecision('dec-002', {
+  reviewed: true,
+  reviewNotes: 'Approved - camelCase is correct for this project'
+});
+
+// Export decisions for reporting
+const report = await wavePool.exportDecisions({
+  format: 'markdown',           // 'json' | 'markdown' | 'csv'
+  includeAIReasoning: true
+});
+```
+
+#### Decision Events
+
+```typescript
+// Listen for all decisions
+wavePool.on('decision:logged', ({ decision }) => {
+  console.log(`Decision logged: ${decision.id}`);
+});
+
+// Listen specifically for user answers
+wavePool.on('decision:user-answered', ({ decision }) => {
+  // Update UI to show user's choice was recorded
+});
+
+// Listen specifically for AI decisions
+wavePool.on('decision:ai-decided', ({ decision }) => {
+  // Optionally show notification that AI made a decision
+  if (decision.answer.confidence < 0.8) {
+    ui.warn(`AI made low-confidence decision: ${decision.question.prompt}`);
+  }
+});
+```
+
 ### SDK Usage Examples
 
 #### Example 1: CLI Usage (Terminal)
@@ -664,15 +1036,15 @@ export interface Adapters {
 ```typescript
 // packages/cli/src/commands/execute.ts
 
-import { AgentOS } from '@agent-os/sdk';
+import { WavePool } from '@wavepool/sdk';
 import { TerminalUIAdapter } from '../adapters/TerminalUIAdapter';
 import ora from 'ora';
 import chalk from 'chalk';
 
 export async function executeCommand(options: CommandOptions) {
-  const spinner = ora('Initializing Agent OS...').start();
+  const spinner = ora('Initializing WavePool...').start();
 
-  const agentOS = new AgentOS({
+  const wavePool = new WavePool({
     projectDir: options.dir || process.cwd(),
     profile: options.profile,
     adapters: {
@@ -681,19 +1053,19 @@ export async function executeCommand(options: CommandOptions) {
   });
 
   // Wire up events to terminal UI
-  agentOS.on('phase:start', ({ phase, itemCount }) => {
+  wavePool.on('phase:start', ({ phase, itemCount }) => {
     spinner.text = `${phase}: Processing ${itemCount} items...`;
   });
 
-  agentOS.on('batch:progress', ({ completed, total, current }) => {
+  wavePool.on('batch:progress', ({ completed, total, current }) => {
     spinner.text = `[${completed}/${total}] ${current}`;
   });
 
-  agentOS.on('session:start', ({ task }) => {
+  wavePool.on('session:start', ({ task }) => {
     spinner.text = chalk.cyan(`Session: ${task.name}`);
   });
 
-  agentOS.on('interaction:required', async ({ prompt, options, resolve }) => {
+  wavePool.on('interaction:required', async ({ prompt, options, resolve }) => {
     spinner.stop();
     const answer = await promptUser(prompt, options);
     resolve(answer);
@@ -701,7 +1073,7 @@ export async function executeCommand(options: CommandOptions) {
   });
 
   try {
-    const result = await agentOS.execute({
+    const result = await wavePool.execute({
       specOnly: options.specOnly,
       checkpointAt: options.checkpoint,
     });
@@ -719,15 +1091,15 @@ export async function executeCommand(options: CommandOptions) {
 #### Example 2: Electron App Integration
 
 ```typescript
-// electron-app/src/main/agent-os-integration.ts
+// electron-app/src/main/wavepool-integration.ts
 
-import { AgentOS } from '@agent-os/sdk';
+import { WavePool } from '@wavepool/sdk';
 import { BrowserWindow, ipcMain } from 'electron';
 import { ElectronFileSystemAdapter } from './adapters/ElectronFileSystemAdapter';
 import { ElectronUIAdapter } from './adapters/ElectronUIAdapter';
 
-export class AgentOSIntegration {
-  private agentOS: AgentOS | null = null;
+export class WavePoolIntegration {
+  private wavePool: WavePool | null = null;
   private mainWindow: BrowserWindow;
 
   constructor(mainWindow: BrowserWindow) {
@@ -736,8 +1108,8 @@ export class AgentOSIntegration {
   }
 
   private setupIPC() {
-    ipcMain.handle('agent-os:init', async (_, projectDir: string) => {
-      this.agentOS = new AgentOS({
+    ipcMain.handle('wavepool:init', async (_, projectDir: string) => {
+      this.wavePool = new WavePool({
         projectDir,
         adapters: {
           fileSystem: new ElectronFileSystemAdapter(),
@@ -746,36 +1118,36 @@ export class AgentOSIntegration {
       });
 
       // Forward all events to renderer process
-      this.agentOS.on('*', (eventName, data) => {
-        this.mainWindow.webContents.send('agent-os:event', { eventName, data });
+      this.wavePool.on('*', (eventName, data) => {
+        this.mainWindow.webContents.send('wavepool:event', { eventName, data });
       });
 
       return { success: true };
     });
 
-    ipcMain.handle('agent-os:execute', async (_, options) => {
-      if (!this.agentOS) throw new Error('AgentOS not initialized');
-      return this.agentOS.execute(options);
+    ipcMain.handle('wavepool:execute', async (_, options) => {
+      if (!this.wavePool) throw new Error('WavePool not initialized');
+      return this.wavePool.execute(options);
     });
 
-    ipcMain.handle('agent-os:cancel', async () => {
-      this.agentOS?.cancel();
+    ipcMain.handle('wavepool:cancel', async () => {
+      this.wavePool?.cancel();
     });
 
-    ipcMain.handle('agent-os:get-roadmap', async () => {
-      if (!this.agentOS) throw new Error('AgentOS not initialized');
-      return this.agentOS.getRoadmap();
+    ipcMain.handle('wavepool:get-roadmap', async () => {
+      if (!this.wavePool) throw new Error('WavePool not initialized');
+      return this.wavePool.getRoadmap();
     });
   }
 }
 
 // In renderer process (React):
-// electron-app/src/renderer/hooks/useAgentOS.ts
+// electron-app/src/renderer/hooks/useWavePool.ts
 
 import { useEffect, useState, useCallback } from 'react';
 import { ipcRenderer } from 'electron';
 
-export function useAgentOS() {
+export function useWavePool() {
   const [status, setStatus] = useState<'idle' | 'running' | 'error'>('idle');
   const [progress, setProgress] = useState<Progress | null>(null);
   const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
@@ -795,18 +1167,18 @@ export function useAgentOS() {
       }
     };
 
-    ipcRenderer.on('agent-os:event', handleEvent);
-    return () => ipcRenderer.off('agent-os:event', handleEvent);
+    ipcRenderer.on('wavepool:event', handleEvent);
+    return () => ipcRenderer.off('wavepool:event', handleEvent);
   }, []);
 
   const execute = useCallback(async (projectDir: string, options?: ExecuteOptions) => {
-    await ipcRenderer.invoke('agent-os:init', projectDir);
+    await ipcRenderer.invoke('wavepool:init', projectDir);
     setStatus('running');
-    return ipcRenderer.invoke('agent-os:execute', options);
+    return ipcRenderer.invoke('wavepool:execute', options);
   }, []);
 
   const cancel = useCallback(() => {
-    ipcRenderer.invoke('agent-os:cancel');
+    ipcRenderer.invoke('wavepool:cancel');
   }, []);
 
   return { status, progress, roadmap, execute, cancel };
@@ -816,15 +1188,15 @@ export function useAgentOS() {
 #### Example 3: Web Application (with Backend Proxy)
 
 ```typescript
-// web-app/src/services/AgentOSService.ts
+// web-app/src/services/WavePoolService.ts
 
-import { AgentOSEvents } from '@agent-os/sdk';
+import { WavePoolEvents } from '@wavepool/sdk';
 
 /**
- * Web client that communicates with a backend Agent OS server.
+ * Web client that communicates with a backend WavePool server.
  * The server runs the actual SDK; the client receives events via WebSocket.
  */
-export class AgentOSWebClient {
+export class WavePoolWebClient {
   private ws: WebSocket;
   private listeners: Map<string, Set<Function>> = new Map();
 
@@ -836,9 +1208,9 @@ export class AgentOSWebClient {
     };
   }
 
-  on<K extends keyof AgentOSEvents>(
+  on<K extends keyof WavePoolEvents>(
     event: K,
-    callback: (data: AgentOSEvents[K]) => void
+    callback: (data: WavePoolEvents[K]) => void
   ): void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
@@ -865,8 +1237,8 @@ export class AgentOSWebClient {
 }
 
 // React hook for web app
-export function useAgentOSWeb(serverUrl: string) {
-  const [client] = useState(() => new AgentOSWebClient(serverUrl));
+export function useWavePoolWeb(serverUrl: string) {
+  const [client] = useState(() => new WavePoolWebClient(serverUrl));
   const [progress, setProgress] = useState<Progress | null>(null);
 
   useEffect(() => {
@@ -885,9 +1257,9 @@ export function useAgentOSWeb(serverUrl: string) {
 #### Example 4: Headless/CI Usage
 
 ```typescript
-// ci-script/run-agent-os.ts
+// ci-script/run-wavepool.ts
 
-import { AgentOS } from '@agent-os/sdk';
+import { WavePool } from '@wavepool/sdk';
 
 /**
  * Headless adapter that auto-responds to interactions.
@@ -930,7 +1302,7 @@ class HeadlessUIAdapter implements UIAdapter {
 
 // CI script
 async function main() {
-  const agentOS = new AgentOS({
+  const wavePool = new WavePool({
     projectDir: process.env.PROJECT_DIR!,
     profile: 'default',
     adapters: {
@@ -944,12 +1316,12 @@ async function main() {
     },
   });
 
-  agentOS.on('execute:error', ({ error }) => {
+  wavePool.on('execute:error', ({ error }) => {
     console.error('Execution failed:', error);
     process.exit(1);
   });
 
-  await agentOS.execute({ specOnly: true });
+  await wavePool.execute({ specOnly: true });
   console.log('Specs generated successfully');
 }
 
@@ -982,13 +1354,13 @@ Electron apps run the SDK in the **main process** (Node.js) and communicate with
 │  ┌─────────────────────────────────────────────────────────────┐ │
 │  │                    MAIN PROCESS (Node.js)                    │ │
 │  │                                                              │ │
-│  │   @agent-os/sdk                                              │ │
+│  │   @wavepool/sdk                                              │ │
 │  │   ├── Uses native fs                                         │ │
 │  │   ├── Uses simple-git                                        │ │
 │  │   ├── Connects to Claude API directly                        │ │
 │  │   └── Emits events → forwarded to renderer                   │ │
 │  │                                                              │ │
-│  │   ipcMain.handle('agent-os:*', ...) ◄────────────┐           │ │
+│  │   ipcMain.handle('wavepool:*', ...) ◄────────────┐           │ │
 │  │                                                   │           │ │
 │  └───────────────────────────────────────────────────┼──────────┘ │
 │                                                      │ IPC        │
@@ -996,8 +1368,8 @@ Electron apps run the SDK in the **main process** (Node.js) and communicate with
 │  │                  RENDERER PROCESS (Browser)       │          │ │
 │  │                                                   ▼          │ │
 │  │   React/Vue/Svelte UI                                        │ │
-│  │   ├── ipcRenderer.invoke('agent-os:execute', ...)            │ │
-│  │   ├── ipcRenderer.on('agent-os:event', ...)                  │ │
+│  │   ├── ipcRenderer.invoke('wavepool:execute', ...)            │ │
+│  │   ├── ipcRenderer.on('wavepool:event', ...)                  │ │
 │  │   └── Displays progress, handles user interactions           │ │
 │  │                                                              │ │
 │  └──────────────────────────────────────────────────────────────┘ │
@@ -1018,26 +1390,26 @@ Electron apps run the SDK in the **main process** (Node.js) and communicate with
 
 import { contextBridge, ipcRenderer } from 'electron';
 
-contextBridge.exposeInMainWorld('agentOS', {
-  execute: (options) => ipcRenderer.invoke('agent-os:execute', options),
-  cancel: () => ipcRenderer.invoke('agent-os:cancel'),
-  getRoadmap: () => ipcRenderer.invoke('agent-os:get-roadmap'),
+contextBridge.exposeInMainWorld('wavePool', {
+  execute: (options) => ipcRenderer.invoke('wavepool:execute', options),
+  cancel: () => ipcRenderer.invoke('wavepool:cancel'),
+  getRoadmap: () => ipcRenderer.invoke('wavepool:get-roadmap'),
 
   onEvent: (callback) => {
     const handler = (_, data) => callback(data);
-    ipcRenderer.on('agent-os:event', handler);
-    return () => ipcRenderer.off('agent-os:event', handler);
+    ipcRenderer.on('wavepool:event', handler);
+    return () => ipcRenderer.off('wavepool:event', handler);
   },
 });
 
 // Type declarations for renderer
 declare global {
   interface Window {
-    agentOS: {
+    wavePool: {
       execute: (options?: ExecuteOptions) => Promise<ExecutionResult>;
       cancel: () => Promise<void>;
       getRoadmap: () => Promise<Roadmap>;
-      onEvent: (callback: (event: AgentOSEvent) => void) => () => void;
+      onEvent: (callback: (event: WavePoolEvent) => void) => () => void;
     };
   }
 }
@@ -1056,7 +1428,7 @@ For web applications, the SDK runs on a **backend server** with the web client c
 │  │   BROWSER CLIENT    │          │        BACKEND SERVER            │   │
 │  │                     │          │                                  │   │
 │  │  React/Vue UI       │  WS/HTTP │  Express/Fastify                 │   │
-│  │  ├─ WebSocket ─────────────────►  ├─ @agent-os/sdk               │   │
+│  │  ├─ WebSocket ─────────────────►  ├─ @wavepool/sdk               │   │
 │  │  │  connection      │          │  │  ├─ Full Node.js env         │   │
 │  │  │                  │◄─────────┤  │  ├─ Native fs access         │   │
 │  │  ├─ Receives events │  Events  │  │  ├─ Git operations           │   │
@@ -1076,12 +1448,12 @@ For web applications, the SDK runs on a **backend server** with the web client c
 // web-server/src/server.ts
 
 import { WebSocketServer } from 'ws';
-import { AgentOS } from '@agent-os/sdk';
+import { WavePool } from '@wavepool/sdk';
 
 const wss = new WebSocketServer({ port: 8080 });
 
 // Track active sessions per connection
-const sessions = new Map<WebSocket, AgentOS>();
+const sessions = new Map<WebSocket, WavePool>();
 
 wss.on('connection', (ws) => {
   ws.on('message', async (message) => {
@@ -1090,15 +1462,15 @@ wss.on('connection', (ws) => {
     switch (action) {
       case 'init': {
         const projectDir = getProjectDir(projectId); // Map project ID to path
-        const agentOS = new AgentOS({ projectDir });
+        const wavePool = new WavePool({ projectDir });
 
         // Forward all events to client
-        agentOS.on('*', (eventName, data) => {
+        wavePool.on('*', (eventName, data) => {
           ws.send(JSON.stringify({ type: 'event', eventName, data }));
         });
 
         // Handle interaction requests
-        agentOS.on('interaction:required', async ({ prompt, resolve, reject }) => {
+        wavePool.on('interaction:required', async ({ prompt, resolve, reject }) => {
           const interactionId = generateId();
           pendingInteractions.set(interactionId, { resolve, reject });
           ws.send(JSON.stringify({
@@ -1108,19 +1480,19 @@ wss.on('connection', (ws) => {
           }));
         });
 
-        sessions.set(ws, agentOS);
+        sessions.set(ws, wavePool);
         ws.send(JSON.stringify({ type: 'ready' }));
         break;
       }
 
       case 'execute': {
-        const agentOS = sessions.get(ws);
-        if (!agentOS) {
+        const wavePool = sessions.get(ws);
+        if (!wavePool) {
           ws.send(JSON.stringify({ type: 'error', message: 'Not initialized' }));
           return;
         }
         try {
-          const result = await agentOS.execute(options);
+          const result = await wavePool.execute(options);
           ws.send(JSON.stringify({ type: 'result', result }));
         } catch (error) {
           ws.send(JSON.stringify({ type: 'error', message: error.message }));
@@ -1160,7 +1532,7 @@ VS Code extensions run in a Node.js environment with access to the VS Code API:
 // vscode-extension/src/extension.ts
 
 import * as vscode from 'vscode';
-import { AgentOS } from '@agent-os/sdk';
+import { WavePool } from '@wavepool/sdk';
 
 class VSCodeUIAdapter implements UIAdapter {
   async prompt(options: PromptOptions): Promise<string> {
@@ -1227,10 +1599,10 @@ class VSCodeUIAdapter implements UIAdapter {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  const outputChannel = vscode.window.createOutputChannel('Agent OS');
+  const outputChannel = vscode.window.createOutputChannel('WavePool');
 
   const executeCommand = vscode.commands.registerCommand(
-    'agent-os.execute',
+    'wavepool.execute',
     async () => {
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
       if (!workspaceFolder) {
@@ -1238,22 +1610,22 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      const agentOS = new AgentOS({
+      const wavePool = new WavePool({
         projectDir: workspaceFolder.uri.fsPath,
         adapters: {
           ui: new VSCodeUIAdapter(),
         },
       });
 
-      agentOS.on('session:progress', ({ message }) => {
+      wavePool.on('session:progress', ({ message }) => {
         outputChannel.appendLine(message);
       });
 
       try {
-        await agentOS.execute();
-        vscode.window.showInformationMessage('Agent OS execution complete');
+        await wavePool.execute();
+        vscode.window.showInformationMessage('WavePool execution complete');
       } catch (error) {
-        vscode.window.showErrorMessage(`Agent OS failed: ${error.message}`);
+        vscode.window.showErrorMessage(`WavePool failed: ${error.message}`);
       }
     }
   );
@@ -1276,12 +1648,12 @@ This mode is **not recommended** for production but useful for:
 
 ```typescript
 // Browser-only experimental setup
-import { AgentOS } from '@agent-os/sdk';
-import { BrowserFileSystemAdapter } from '@agent-os/sdk/adapters/browser';
-import { IsomorphicGitAdapter } from '@agent-os/sdk/adapters/isomorphic-git';
-import { ProxiedClaudeAdapter } from '@agent-os/sdk/adapters/proxied-claude';
+import { WavePool } from '@wavepool/sdk';
+import { BrowserFileSystemAdapter } from '@wavepool/sdk/adapters/browser';
+import { IsomorphicGitAdapter } from '@wavepool/sdk/adapters/isomorphic-git';
+import { ProxiedClaudeAdapter } from '@wavepool/sdk/adapters/proxied-claude';
 
-const agentOS = new AgentOS({
+const wavePool = new WavePool({
   projectDir: '/virtual/project',  // Virtual path
   adapters: {
     fileSystem: new BrowserFileSystemAdapter({
@@ -1321,7 +1693,7 @@ class ProfileInstaller {
   async install(options: InstallOptions): Promise<void> {
     const profile = await this.loadProfile(options.profile);
 
-    // Create agent-os directory structure
+    // Create wavepool directory structure
     await this.createDirectoryStructure(options.targetDir);
 
     // Install skills as Claude Code skill files
@@ -1367,10 +1739,10 @@ requirements for the specified roadmap item through structured Q&A.
 
 ## Context Files to Read
 
-1. \`agent-os/product/roadmap.json\` - Current roadmap
-2. \`agent-os/product/mission.md\` - Product vision
-3. \`agent-os/product/tech-stack.md\` - Technical decisions
-4. \`agent-os/product/findings.json\` - Institutional knowledge
+1. \`wavepool/product/roadmap.json\` - Current roadmap
+2. \`wavepool/product/mission.md\` - Product vision
+3. \`wavepool/product/tech-stack.md\` - Technical decisions
+4. \`wavepool/product/findings.json\` - Institutional knowledge
 
 ## Your Task
 
@@ -1385,7 +1757,7 @@ Shape roadmap item: {{roadmapItemId}}
 2. Read any related specs (items this depends on)
 3. Generate 5-10 clarifying questions organized by category
 4. Collect answers through conversation
-5. Write structured requirements to \`agent-os/specs/{{specPath}}/planning/requirements.md\`
+5. Write structured requirements to \`wavepool/specs/{{specPath}}/planning/requirements.md\`
 6. Update spec-meta.json with status: "shaped"
 
 ## Output Format
@@ -1459,9 +1831,9 @@ You are an expert software engineer. When implementing tasks:
 ## Standards to Follow
 
 Read and apply standards from:
-- \`agent-os/standards/global/\` - Universal standards
-- \`agent-os/standards/backend/\` - Backend-specific (if applicable)
-- \`agent-os/standards/frontend/\` - Frontend-specific (if applicable)
+- \`wavepool/standards/global/\` - Universal standards
+- \`wavepool/standards/backend/\` - Backend-specific (if applicable)
+- \`wavepool/standards/frontend/\` - Frontend-specific (if applicable)
 
 ## Task Completion
 
@@ -1486,9 +1858,9 @@ Implement task group "{{taskGroup.name}}" ({{taskGroup.id}}) for spec {{specId}}
 ## Files to Read
 
 1. .claude/agents/implementer.md - Your behavioral guidelines
-2. agent-os/specs/{{specId}}/spec.md - The specification
-3. agent-os/specs/{{specId}}/tasks.json - Task breakdown
-4. agent-os/standards/ - Coding standards to follow
+2. wavepool/specs/{{specId}}/spec.md - The specification
+3. wavepool/specs/{{specId}}/tasks.json - Task breakdown
+4. wavepool/standards/ - Coding standards to follow
 
 ## Task Group Details
 
@@ -1722,11 +2094,11 @@ Implement task group "{{taskGroup.name}}" ({{taskGroup.id}}) for spec {{specId}}
 ## Context to Read
 
 1. .claude/agents/implementer.md - Your behavioral guidelines
-2. agent-os/specs/{{specId}}/spec.md - The specification
-3. agent-os/specs/{{specId}}/tasks.json - Task breakdown
-4. agent-os/product/tech-stack.md - Technical decisions
-5. agent-os/product/findings.json - Patterns and gotchas
-6. agent-os/standards/ - Coding standards to follow
+2. wavepool/specs/{{specId}}/spec.md - The specification
+3. wavepool/specs/{{specId}}/tasks.json - Task breakdown
+4. wavepool/product/tech-stack.md - Technical decisions
+5. wavepool/product/findings.json - Patterns and gotchas
+6. wavepool/standards/ - Coding standards to follow
 
 ## Task Group Details
 
@@ -1763,7 +2135,7 @@ class StateManager {
   constructor(private projectDir: string) {}
 
   async loadRoadmap(): Promise<Roadmap> {
-    const path = this.resolvePath('agent-os/product/roadmap.json');
+    const path = this.resolvePath('wavepool/product/roadmap.json');
     return JSON.parse(await fs.readFile(path, 'utf-8'));
   }
 
@@ -1775,18 +2147,18 @@ class StateManager {
     Object.assign(item, updates);
 
     await fs.writeFile(
-      this.resolvePath('agent-os/product/roadmap.json'),
+      this.resolvePath('wavepool/product/roadmap.json'),
       JSON.stringify(roadmap, null, 2)
     );
   }
 
   async loadTasks(specId: string): Promise<TasksFile> {
-    const path = this.resolvePath(`agent-os/specs/${specId}/tasks.json`);
+    const path = this.resolvePath(`wavepool/specs/${specId}/tasks.json`);
     return JSON.parse(await fs.readFile(path, 'utf-8'));
   }
 
   async appendFindings(findings: Finding[]): Promise<void> {
-    const path = this.resolvePath('agent-os/product/findings.json');
+    const path = this.resolvePath('wavepool/product/findings.json');
     const existing = JSON.parse(await fs.readFile(path, 'utf-8'));
 
     for (const finding of findings) {
@@ -1801,7 +2173,7 @@ class StateManager {
 
   // Git operations for tracking changes
   async commitState(message: string): Promise<string> {
-    const result = await exec('git add agent-os/ && git commit -m ' +
+    const result = await exec('git add wavepool/ && git commit -m ' +
       JSON.stringify(message));
     return result.stdout.trim();
   }
@@ -1824,14 +2196,14 @@ import { Orchestrator } from './orchestrator/Orchestrator';
 const program = new Command();
 
 program
-  .name('agent-os')
+  .name('wavepool')
   .description('TypeScript orchestration for AI-driven development')
   .version('1.0.0');
 
 // Profile management
 program
   .command('install')
-  .description('Install Agent OS into a project')
+  .description('Install WavePool into a project')
   .option('-p, --profile <name>', 'Profile to install', 'default')
   .option('-d, --dir <path>', 'Target directory', '.')
   .action(async (options) => {
@@ -1842,7 +2214,7 @@ program
       claudeCodeSkills: true,
       includeSchemas: true,
     });
-    console.log('Agent OS installed successfully');
+    console.log('WavePool installed successfully');
   });
 
 // Planning phase
@@ -1932,7 +2304,7 @@ program.parse();
 ```bash
 # User has a roadmap.json with 5 items
 
-$ agent-os execute
+$ wavepool execute
 
 [Planning] Validating roadmap...
 [Planning] Found 5 items: auth, profiles, dashboard, notifications, settings
@@ -1944,7 +2316,7 @@ $ agent-os execute
   > Q2: Should we support MFA?
   < Yes, TOTP-based
   ... (user answers questions)
-[Session 1/5] Complete. Requirements written to agent-os/specs/2026-01-21-auth/
+[Session 1/5] Complete. Requirements written to wavepool/specs/2026-01-21-auth/
 
 [Session 2/5] Shaping "profiles"...
   ... (continues for each item)
@@ -2008,7 +2380,7 @@ Because state is in files, the orchestrator can resume from any point:
 ```bash
 # Previous run was interrupted during profiles implementation
 
-$ agent-os execute
+$ wavepool execute
 
 [Resuming] Detected existing state...
   Completed: auth (status: completed)
@@ -2030,7 +2402,7 @@ Resume from profiles task group 3? [Y/n]: y
 ```bash
 # Just want to create all specs, not implement yet
 
-$ agent-os spec --parallel
+$ wavepool spec --parallel
 
 [Shaping] Starting sequential shaping...
 ... (user answers questions for each item)
@@ -2039,11 +2411,11 @@ $ agent-os spec --parallel
 [Session 1-5] Writing specs... ✓ (5/5)
 
 [Complete] 5 specs created
-  auth: agent-os/specs/2026-01-21-auth/
-  profiles: agent-os/specs/2026-01-21-profiles/
-  dashboard: agent-os/specs/2026-01-21-dashboard/
-  notifications: agent-os/specs/2026-01-21-notifications/
-  settings: agent-os/specs/2026-01-21-settings/
+  auth: wavepool/specs/2026-01-21-auth/
+  profiles: wavepool/specs/2026-01-21-profiles/
+  dashboard: wavepool/specs/2026-01-21-dashboard/
+  notifications: wavepool/specs/2026-01-21-notifications/
+  settings: wavepool/specs/2026-01-21-settings/
 ```
 
 ---
@@ -2097,15 +2469,15 @@ $ agent-os spec --parallel
 **Goal:** Set up monorepo structure with SDK and CLI packages
 
 1. Initialize monorepo with Turborepo/npm workspaces
-2. Create `@agent-os/sdk` package with core types and interfaces
-3. Create `@agent-os/cli` package with basic CLI scaffolding
+2. Create `@wavepool/sdk` package with core types and interfaces
+3. Create `@wavepool/cli` package with basic CLI scaffolding
 4. Define adapter interfaces (`FileSystemAdapter`, `GitAdapter`, `UIAdapter`, `ClaudeAdapter`)
 5. Implement Node.js default adapters for SDK
 6. Set up build pipeline with tsup for both packages
 
 **Deliverables:**
 - Monorepo structure with `packages/sdk` and `packages/cli`
-- SDK exports clean public API (`AgentOS`, adapters, types)
+- SDK exports clean public API (`WavePool`, adapters, types)
 - CLI can import and use SDK
 - Build produces both ESM and CJS bundles
 - Type declarations generated correctly
@@ -2124,7 +2496,7 @@ $ agent-os spec --parallel
 - SDK emits typed events for all operations
 - Host applications can subscribe to events
 - State operations work through adapter abstraction
-- `agentOS.installProfile()` works from SDK
+- `wavePool.installProfile()` works from SDK
 - Prompt templates bundled with SDK package
 
 ### Phase 3: Session Management
@@ -2154,7 +2526,7 @@ $ agent-os spec --parallel
 5. Handle `interaction:required` events from SDK
 
 **Deliverables:**
-- `agent-os install` works (uses SDK)
+- `wavepool install` works (uses SDK)
 - Terminal shows spinners and progress
 - Interactive prompts work for shaping phase
 - Clean error handling and user feedback
@@ -2170,10 +2542,10 @@ $ agent-os spec --parallel
 5. Cancellation support throughout
 
 **Deliverables:**
-- `agentOS.plan()` creates roadmap
-- `agentOS.spec()` shapes and writes specs
-- `agentOS.implement()` executes tasks
-- CLI commands (`agent-os plan`, `agent-os spec`, `agent-os implement`) work
+- `wavePool.plan()` creates roadmap
+- `wavePool.spec()` shapes and writes specs
+- `wavePool.implement()` executes tasks
+- CLI commands (`wavepool plan`, `wavepool spec`, `wavepool implement`) work
 
 ### Phase 6: Batch Processing
 
@@ -2186,7 +2558,7 @@ $ agent-os spec --parallel
 5. Concurrency respects adapter capabilities
 
 **Deliverables:**
-- `agentOS.spec({ parallel: true })` writes specs concurrently
+- `wavePool.spec({ parallel: true })` writes specs concurrently
 - `batch:start`, `batch:progress`, `batch:complete` events emitted
 - Multiple Claude sessions run simultaneously
 - Dependencies respected in execution order
@@ -2202,7 +2574,7 @@ $ agent-os spec --parallel
 5. Emit `drift:detected` and `alignment:conflict` events
 
 **Deliverables:**
-- `agentOS.align('specs')` reviews all specs
+- `wavePool.align('specs')` reviews all specs
 - Checkpoints emit events for host to handle
 - Drift detected and classified by severity
 - CLI shows alignment UI, SDK emits events
@@ -2218,7 +2590,7 @@ $ agent-os spec --parallel
 5. Documentation and examples for both SDK and CLI
 
 **Deliverables:**
-- `agentOS.execute()` runs full workflow
+- `wavePool.execute()` runs full workflow
 - Interrupted runs resume cleanly
 - Comprehensive SDK documentation
 - Example integrations (Electron, VS Code, Web)
@@ -2243,7 +2615,7 @@ $ agent-os spec --parallel
 
 ## Configuration
 
-### agent-os.config.json
+### wavepool.config.json
 
 ```json
 {
@@ -2261,14 +2633,32 @@ $ agent-os spec --parallel
     "implementation": "claude-sonnet-4-5-20250929",
     "alignment": "claude-opus-4-5-20251101"
   },
+  "interaction": {
+    "questionDeliveryMode": "sequential"
+  },
+  "autonomy": {
+    "planning": "ask",
+    "shaping": "ask",
+    "specWriting": "ask",
+    "taskCreation": "autonomous",
+    "alignment": "autonomous",
+    "implementation": "autonomous-low-risk"
+  },
   "checkpoints": {
     "afterSpecAlignment": true,
     "afterTaskAlignment": true,
     "onHighSeverityDrift": true
   },
+  "decisionLog": {
+    "enabled": true,
+    "path": "wavepool/product/decisions_log.json",
+    "includeAIReasoning": true,
+    "autoReviewLowConfidence": true,
+    "confidenceThreshold": 0.8
+  },
   "logging": {
     "level": "info",
-    "file": "agent-os.log"
+    "file": "wavepool.log"
   }
 }
 ```
@@ -2287,6 +2677,9 @@ $ agent-os spec --parallel
 | **Orchestration** | User drives | TypeScript drives |
 | **Commands** | Slash commands in Claude Code | Prompt templates sent via SDK |
 | **Agent behavior** | Embedded in commands | Files in `.claude/agents/` |
+| **Question delivery** | Inline in conversation | Sequential or batch (wizard) mode |
+| **AI autonomy** | Always asks user | Per-phase configurable autonomy |
+| **Decision tracking** | None | Full audit log with artifact refs |
 
 ---
 
@@ -2299,7 +2692,7 @@ The project uses npm workspaces (or pnpm/yarn workspaces) for package management
 ```json
 // Root package.json
 {
-  "name": "agent-os",
+  "name": "wavepool",
   "private": true,
   "workspaces": [
     "packages/*"
@@ -2317,14 +2710,14 @@ The project uses npm workspaces (or pnpm/yarn workspaces) for package management
 }
 ```
 
-### SDK Package (@agent-os/sdk)
+### SDK Package (@wavepool/sdk)
 
 ```json
 // packages/sdk/package.json
 {
-  "name": "@agent-os/sdk",
+  "name": "@wavepool/sdk",
   "version": "1.0.0",
-  "description": "Agent OS SDK - Embeddable AI orchestration library",
+  "description": "WavePool SDK - Embeddable AI orchestration library",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -2366,20 +2759,20 @@ The project uses npm workspaces (or pnpm/yarn workspaces) for package management
 }
 ```
 
-### CLI Package (@agent-os/cli)
+### CLI Package (@wavepool/cli)
 
 ```json
 // packages/cli/package.json
 {
-  "name": "@agent-os/cli",
+  "name": "@wavepool/cli",
   "version": "1.0.0",
-  "description": "Agent OS CLI - Command-line interface for AI orchestration",
+  "description": "WavePool CLI - Command-line interface for AI orchestration",
   "bin": {
-    "agent-os": "./dist/index.js"
+    "wavepool": "./dist/index.js"
   },
   "files": ["dist", "README.md"],
   "dependencies": {
-    "@agent-os/sdk": "workspace:*",
+    "@wavepool/sdk": "workspace:*",
     "commander": "^12.0.0",
     "chalk": "^5.3.0",
     "ora": "^8.0.0",
@@ -2448,7 +2841,7 @@ For browser/Electron environments, additional packages may be needed:
 
 - [Claude Agent SDK - TypeScript](https://github.com/anthropics/claude-agent-sdk-typescript)
 - [Ralph Wiggum Technique](https://github.com/frankbria/ralph-claude-code)
-- [Agent OS v3.0.0 Assessment](./assessment-roadmap-spec-workflow.md)
+- [WavePool v3.0.0 Assessment](./assessment-roadmap-spec-workflow.md)
 - [11 Tips for AI Coding with Ralph Wiggum](https://www.aihero.dev/tips-for-ai-coding-with-ralph-wiggum)
 - [Claude Agent SDK Overview](https://platform.claude.com/docs/en/agent-sdk/overview)
 
@@ -2474,14 +2867,14 @@ Write a complete specification for roadmap item: {{roadmapItemId}}
 ## Context to Read
 
 1. .claude/agents/spec-writer.md - Your behavioral guidelines
-2. agent-os/specs/{{specPath}}/planning/requirements.md - Shaped requirements
-3. agent-os/product/mission.md - Product vision
-4. agent-os/product/tech-stack.md - Technical decisions
-5. agent-os/product/findings.json - Relevant patterns
+2. wavepool/specs/{{specPath}}/planning/requirements.md - Shaped requirements
+3. wavepool/product/mission.md - Product vision
+4. wavepool/product/tech-stack.md - Technical decisions
+5. wavepool/product/findings.json - Relevant patterns
 
 ## Output
 
-Write the specification to: agent-os/specs/{{specPath}}/spec.md
+Write the specification to: wavepool/specs/{{specPath}}/spec.md
 
 The spec should include:
 - Overview and goals
@@ -2520,7 +2913,7 @@ You write clear, comprehensive technical specifications.
 ## Standards to Follow
 
 Read and apply standards from:
-- `agent-os/standards/global/` - Universal standards
+- `wavepool/standards/global/` - Universal standards
 
 ## Writing Style
 
@@ -2536,12 +2929,13 @@ Read and apply standards from:
 
 ```
 target-project/
-├── agent-os/                      # State files (read/written by Claude)
+├── wavepool/                      # State files (read/written by Claude)
 │   ├── product/
 │   │   ├── mission.md             # Product vision
 │   │   ├── roadmap.json           # Roadmap items with statuses
 │   │   ├── tech-stack.md          # Technical decisions
-│   │   └── findings.json          # Institutional knowledge
+│   │   ├── findings.json          # Institutional knowledge
+│   │   └── decisions_log.json     # Decision audit trail
 │   ├── specs/
 │   │   ├── 2026-01-21-auth/
 │   │   │   ├── spec-meta.json     # Spec metadata and status
@@ -2562,13 +2956,13 @@ target-project/
 │   │   ├── product-planner.md
 │   │   └── ...
 │   └── settings.json              # Claude Code settings
-└── agent-os.config.json           # Orchestrator configuration
+└── wavepool.config.json           # Orchestrator configuration
 ```
 
 ## Appendix B.2: TypeScript Project File Locations
 
 ```
-agent-os/                          # The orchestrator (this project)
+wavepool/                          # The orchestrator (this project)
 ├── src/
 │   ├── prompts/
 │   │   └── templates/             # ★ Prompt templates (sent via SDK)
@@ -2585,8 +2979,8 @@ agent-os/                          # The orchestrator (this project)
 ├── profiles/                      # Profile definitions (installed to projects)
 │   ├── default/
 │   │   ├── agents/                # → Installed to .claude/agents/
-│   │   ├── standards/             # → Installed to agent-os/standards/
-│   │   └── schemas/               # → Installed to agent-os/schemas/
+│   │   ├── standards/             # → Installed to wavepool/standards/
+│   │   └── schemas/               # → Installed to wavepool/schemas/
 │   └── rails-apps/
 └── ...
 ```
@@ -2601,7 +2995,7 @@ agent-os/                          # The orchestrator (this project)
 │   (CLI)     │     │ Orchestrator │     │      SDK        │
 └─────────────┘     └──────────────┘     └─────────────────┘
        │                   │                      │
-       │ agent-os execute  │                      │
+       │ wavepool execute  │                      │
        │──────────────────▶│                      │
        │                   │                      │
        │                   │ Read roadmap.json    │
