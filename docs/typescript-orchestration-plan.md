@@ -2,7 +2,7 @@
 
 **Date:** 2026-01-21
 **Status:** Proposal
-**Version:** 1.0.0
+**Version:** 1.1.0
 
 ---
 
@@ -14,6 +14,69 @@ This plan outlines converting Agent OS from a pure markdown/YAML documentation s
 2. **Fresh sessions per task group** - Implements the [Ralph Wiggum strategy](https://github.com/frankbria/ralph-claude-code) where each task group executes in a clean context window
 3. **Prompt templates in TypeScript** - Commands like `/write-spec` become prompt templates stored in the TypeScript project and sent via the Agent SDK
 4. **Skills/Agents as project files** - Claude Code reads skill/agent definitions from the target project's `.claude/` directory for behavioral guidance during execution
+
+---
+
+## Dual-Target Architecture: SDK + CLI
+
+Agent OS is designed as a **layered system** that supports two primary consumption patterns:
+
+1. **Embeddable SDK** - A programmatic TypeScript library for integration into Electron apps, web applications, VS Code extensions, and other host environments
+2. **Executable CLI** - A command-line interface built on top of the SDK for terminal-based workflows
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         CONSUMPTION LAYERS                               │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌────────────┐  │
+│   │  CLI App    │   │ Electron    │   │   Web App   │   │  VS Code   │  │
+│   │  (Terminal) │   │    App      │   │  (Browser)  │   │ Extension  │  │
+│   └──────┬──────┘   └──────┬──────┘   └──────┬──────┘   └──────┬─────┘  │
+│          │                 │                 │                 │         │
+│          ▼                 ▼                 ▼                 ▼         │
+│   ┌─────────────────────────────────────────────────────────────────┐   │
+│   │                     CLI Layer (Optional)                         │   │
+│   │    commander.js • terminal UI • progress bars • stdin/stdout     │   │
+│   └─────────────────────────────┬───────────────────────────────────┘   │
+│                                 │                                        │
+│                                 ▼                                        │
+│   ┌─────────────────────────────────────────────────────────────────┐   │
+│   │                      @agent-os/sdk (Core)                        │   │
+│   │   Orchestrator • SessionManager • StateManager • BatchProcessor  │   │
+│   │   PromptBuilder • LifecyclePhases • EventEmitter                 │   │
+│   └─────────────────────────────┬───────────────────────────────────┘   │
+│                                 │                                        │
+│                                 ▼                                        │
+│   ┌─────────────────────────────────────────────────────────────────┐   │
+│   │                    Adapters (Pluggable)                          │   │
+│   │   FileSystemAdapter • GitAdapter • ClaudeAdapter • UIAdapter     │   │
+│   └─────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Why This Architecture?
+
+| Goal | Solution |
+|------|----------|
+| **Reusability** | Core SDK can be embedded in any TypeScript/JavaScript environment |
+| **Testability** | SDK functions can be unit tested without CLI dependencies |
+| **Flexibility** | Different UIs (terminal, Electron, web) can wrap the same SDK |
+| **Portability** | Adapters abstract platform differences (Node.js vs browser) |
+| **Extensibility** | Host applications can provide custom adapters for storage, git, etc. |
+
+### SDK vs CLI Responsibilities
+
+| Component | SDK Responsibility | CLI Responsibility |
+|-----------|-------------------|-------------------|
+| **Orchestration** | Core logic, state machine, batching | None (uses SDK) |
+| **Session Management** | Spawning, lifecycle, result parsing | None (uses SDK) |
+| **User Interaction** | Emits events, accepts callbacks | Terminal prompts, progress bars |
+| **File System** | Abstract `FileSystemAdapter` interface | Node.js `fs` implementation |
+| **Progress Reporting** | Emits `progress`, `error`, `complete` events | Renders spinners, bars |
+| **Configuration** | Loads and validates config | CLI flags override config |
+| **Profile Management** | Profile loading and validation | Installation commands |
 
 ---
 
@@ -64,7 +127,75 @@ This plan outlines converting Agent OS from a pure markdown/YAML documentation s
 
 ## Core Architecture
 
-### System Components
+### Package Structure (Monorepo)
+
+The project is organized as a monorepo with separate packages for SDK and CLI:
+
+```
+agent-os/
+├── packages/
+│   ├── sdk/                          # @agent-os/sdk - Core library
+│   │   ├── src/
+│   │   │   ├── index.ts              # Public API exports
+│   │   │   ├── AgentOS.ts            # Main entry point class
+│   │   │   ├── orchestrator/
+│   │   │   │   ├── Orchestrator.ts   # Main orchestration engine
+│   │   │   │   ├── SessionManager.ts # Spawns/manages Claude sessions
+│   │   │   │   ├── StateManager.ts   # Reads/writes state (via adapter)
+│   │   │   │   └── BatchProcessor.ts # Parallel/sequential batching
+│   │   │   ├── lifecycle/
+│   │   │   │   ├── PlanningPhase.ts
+│   │   │   │   ├── SpecificationPhase.ts
+│   │   │   │   ├── ImplementationPhase.ts
+│   │   │   │   └── AlignmentPhase.ts
+│   │   │   ├── prompts/
+│   │   │   │   ├── PromptBuilder.ts
+│   │   │   │   ├── PromptRegistry.ts
+│   │   │   │   └── templates/        # Bundled prompt templates
+│   │   │   ├── adapters/             # ★ Pluggable adapters
+│   │   │   │   ├── interfaces.ts     # Adapter interfaces
+│   │   │   │   ├── NodeFileSystemAdapter.ts
+│   │   │   │   ├── NodeGitAdapter.ts
+│   │   │   │   └── DefaultClaudeAdapter.ts
+│   │   │   ├── events/               # ★ Event system
+│   │   │   │   ├── EventEmitter.ts
+│   │   │   │   └── types.ts
+│   │   │   └── types/
+│   │   │       ├── config.ts
+│   │   │       ├── roadmap.ts
+│   │   │       ├── spec.ts
+│   │   │       └── task.ts
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   │
+│   └── cli/                          # @agent-os/cli - Command-line interface
+│       ├── src/
+│       │   ├── index.ts              # CLI entry point
+│       │   ├── commands/
+│       │   │   ├── install.ts
+│       │   │   ├── plan.ts
+│       │   │   ├── spec.ts
+│       │   │   ├── implement.ts
+│       │   │   └── execute.ts
+│       │   ├── ui/                   # Terminal UI components
+│       │   │   ├── ProgressBar.ts
+│       │   │   ├── Spinner.ts
+│       │   │   ├── Prompts.ts        # Interactive prompts
+│       │   │   └── Table.ts
+│       │   └── adapters/
+│       │       └── TerminalUIAdapter.ts
+│       ├── package.json              # Depends on @agent-os/sdk
+│       └── tsconfig.json
+│
+├── profiles/                         # Profile definitions (shared)
+│   ├── default/
+│   └── rails-apps/
+├── package.json                      # Workspace root
+├── turbo.json                        # Turborepo config
+└── README.md
+```
+
+### System Components (Legacy Reference)
 
 ```
 agent-os/
@@ -181,6 +312,991 @@ class SessionManager {
     return result;
   }
 }
+```
+
+---
+
+## SDK Design
+
+### Main Entry Point: AgentOS Class
+
+The SDK exposes a single primary entry point that orchestrates all functionality:
+
+```typescript
+// packages/sdk/src/AgentOS.ts
+
+import { EventEmitter } from './events/EventEmitter';
+import { Orchestrator } from './orchestrator/Orchestrator';
+import type { AgentOSConfig, Adapters, AgentOSEvents } from './types';
+
+/**
+ * Main entry point for the Agent OS SDK.
+ *
+ * @example
+ * // Basic usage
+ * const agentOS = new AgentOS({
+ *   projectDir: '/path/to/project',
+ *   profile: 'default',
+ * });
+ *
+ * await agentOS.execute();
+ *
+ * @example
+ * // With custom adapters (for Electron/Web)
+ * const agentOS = new AgentOS({
+ *   projectDir: '/path/to/project',
+ *   adapters: {
+ *     fileSystem: new ElectronFileSystemAdapter(),
+ *     git: new IsomorphicGitAdapter(),
+ *     ui: new ElectronUIAdapter(mainWindow),
+ *   }
+ * });
+ */
+export class AgentOS extends EventEmitter<AgentOSEvents> {
+  private orchestrator: Orchestrator;
+  private config: AgentOSConfig;
+
+  constructor(config: AgentOSConfig) {
+    super();
+    this.config = this.resolveConfig(config);
+    this.orchestrator = new Orchestrator(this.config, this);
+  }
+
+  // ============ LIFECYCLE METHODS ============
+
+  /**
+   * Execute the entire roadmap from start to finish.
+   * Emits events throughout for progress tracking.
+   */
+  async execute(options?: ExecuteOptions): Promise<ExecutionResult> {
+    this.emit('execute:start', { options });
+    try {
+      const result = await this.orchestrator.executeRoadmap(options);
+      this.emit('execute:complete', { result });
+      return result;
+    } catch (error) {
+      this.emit('execute:error', { error });
+      throw error;
+    }
+  }
+
+  /**
+   * Run only the planning phase (create/update roadmap).
+   */
+  async plan(): Promise<PlanResult> {
+    return this.orchestrator.runPlanningPhase();
+  }
+
+  /**
+   * Run the specification phase for given items.
+   */
+  async spec(options?: SpecOptions): Promise<SpecResult[]> {
+    if (options?.parallel) {
+      return this.orchestrator.runSpecificationPhaseParallel(options.items);
+    }
+    return this.orchestrator.runSpecificationPhase(options?.items);
+  }
+
+  /**
+   * Run the implementation phase for a specific spec or all ready specs.
+   */
+  async implement(options?: ImplementOptions): Promise<ImplementResult> {
+    if (options?.specId) {
+      return this.orchestrator.implementSpec(options.specId);
+    }
+    return this.orchestrator.implementAllSpecs();
+  }
+
+  /**
+   * Run alignment checks on specs or tasks.
+   */
+  async align(target: 'specs' | 'tasks'): Promise<AlignmentReport> {
+    return target === 'specs'
+      ? this.orchestrator.alignSpecs()
+      : this.orchestrator.alignTasks();
+  }
+
+  // ============ PROFILE MANAGEMENT ============
+
+  /**
+   * Install a profile into the target project.
+   */
+  async installProfile(profile?: string): Promise<void> {
+    const profileName = profile || this.config.profile || 'default';
+    await this.orchestrator.installProfile(profileName);
+    this.emit('profile:installed', { profile: profileName });
+  }
+
+  // ============ STATE ACCESS ============
+
+  /**
+   * Get the current roadmap state.
+   */
+  async getRoadmap(): Promise<Roadmap> {
+    return this.orchestrator.stateManager.loadRoadmap();
+  }
+
+  /**
+   * Get specs with optional filtering.
+   */
+  async getSpecs(filter?: SpecFilter): Promise<SpecMeta[]> {
+    return this.orchestrator.stateManager.loadSpecs(filter);
+  }
+
+  /**
+   * Get findings from the knowledge base.
+   */
+  async getFindings(filter?: FindingsFilter): Promise<Finding[]> {
+    return this.orchestrator.stateManager.loadFindings(filter);
+  }
+
+  // ============ CANCELLATION ============
+
+  /**
+   * Cancel any running operation.
+   */
+  cancel(): void {
+    this.orchestrator.cancel();
+    this.emit('cancelled', {});
+  }
+}
+```
+
+### Event System
+
+The SDK uses a typed event emitter for all progress and status updates, enabling host applications to build reactive UIs:
+
+```typescript
+// packages/sdk/src/events/types.ts
+
+export interface AgentOSEvents {
+  // Lifecycle events
+  'execute:start': { options?: ExecuteOptions };
+  'execute:complete': { result: ExecutionResult };
+  'execute:error': { error: Error };
+  'cancelled': {};
+
+  // Phase events
+  'phase:start': { phase: Phase; itemCount: number };
+  'phase:complete': { phase: Phase; results: any[] };
+
+  // Session events (for fresh session tracking)
+  'session:start': { sessionId: string; task: TaskInfo };
+  'session:progress': { sessionId: string; message: string };
+  'session:complete': { sessionId: string; result: SessionResult };
+  'session:error': { sessionId: string; error: Error };
+
+  // Batch processing events
+  'batch:start': { total: number; concurrent: number };
+  'batch:progress': { completed: number; total: number; current?: string };
+  'batch:complete': { results: any[] };
+
+  // User interaction events
+  'interaction:required': {
+    type: 'question' | 'approval' | 'choice';
+    prompt: string;
+    options?: string[];
+    resolve: (answer: string) => void;
+    reject: (reason: string) => void;
+  };
+
+  // Alignment events
+  'alignment:conflict': { conflict: ConflictInfo; severity: Severity };
+  'alignment:resolved': { conflict: ConflictInfo; resolution: string };
+
+  // Drift detection
+  'drift:detected': { drift: DriftInfo; severity: Severity };
+  'drift:resolved': { drift: DriftInfo; resolution: string };
+
+  // Profile events
+  'profile:installed': { profile: string };
+}
+
+// Usage example in host application:
+agentOS.on('session:start', ({ sessionId, task }) => {
+  ui.showSpinner(`Starting: ${task.name}`);
+});
+
+agentOS.on('batch:progress', ({ completed, total }) => {
+  ui.updateProgressBar(completed / total);
+});
+
+agentOS.on('interaction:required', async ({ type, prompt, options, resolve }) => {
+  const answer = await ui.showDialog(type, prompt, options);
+  resolve(answer);
+});
+```
+
+### Adapter Interfaces
+
+Adapters allow the SDK to work in different environments by abstracting platform-specific operations:
+
+```typescript
+// packages/sdk/src/adapters/interfaces.ts
+
+/**
+ * File system operations abstraction.
+ * Implement for Node.js, Electron, browser (with virtual FS), etc.
+ */
+export interface FileSystemAdapter {
+  readFile(path: string): Promise<string>;
+  writeFile(path: string, content: string): Promise<void>;
+  exists(path: string): Promise<boolean>;
+  mkdir(path: string, options?: { recursive?: boolean }): Promise<void>;
+  readdir(path: string): Promise<string[]>;
+  stat(path: string): Promise<FileStat>;
+  glob(pattern: string, options?: GlobOptions): Promise<string[]>;
+  watch?(path: string, callback: (event: WatchEvent) => void): () => void;
+}
+
+/**
+ * Git operations abstraction.
+ * Implement using isomorphic-git for browser, simple-git for Node.js, etc.
+ */
+export interface GitAdapter {
+  status(): Promise<GitStatus>;
+  add(files: string[]): Promise<void>;
+  commit(message: string): Promise<string>;
+  log(options?: LogOptions): Promise<GitCommit[]>;
+  diff(from?: string, to?: string): Promise<string>;
+  getCurrentBranch(): Promise<string>;
+}
+
+/**
+ * Claude interaction abstraction.
+ * Default uses Claude Agent SDK, but can be mocked for testing.
+ */
+export interface ClaudeAdapter {
+  query(options: QueryOptions): AsyncIterable<QueryEvent>;
+  cancel(sessionId: string): Promise<void>;
+}
+
+/**
+ * User interaction abstraction.
+ * Enables different UI paradigms (terminal, GUI, headless).
+ */
+export interface UIAdapter {
+  /**
+   * Ask the user a question and get a response.
+   * For CLI: terminal prompt
+   * For Electron: dialog box
+   * For headless: auto-respond or throw
+   */
+  prompt(options: PromptOptions): Promise<string>;
+
+  /**
+   * Ask user to select from choices.
+   */
+  select(options: SelectOptions): Promise<string>;
+
+  /**
+   * Ask for approval (yes/no).
+   */
+  confirm(message: string): Promise<boolean>;
+
+  /**
+   * Display progress information.
+   * For CLI: spinner/progress bar
+   * For GUI: progress dialog
+   */
+  showProgress(options: ProgressOptions): ProgressHandle;
+
+  /**
+   * Display an informational message.
+   */
+  info(message: string): void;
+
+  /**
+   * Display a warning.
+   */
+  warn(message: string): void;
+
+  /**
+   * Display an error.
+   */
+  error(message: string): void;
+}
+
+/**
+ * Configuration for the SDK.
+ */
+export interface AgentOSConfig {
+  // Required
+  projectDir: string;
+
+  // Optional - defaults provided
+  profile?: string;
+  configPath?: string;  // Path to agent-os.config.json
+
+  // Orchestration settings
+  orchestration?: {
+    maxConcurrency?: number;
+    sessionTimeout?: number;
+    retryAttempts?: number;
+    freshSessionsPerTaskGroup?: boolean;
+  };
+
+  // Model configuration
+  models?: {
+    shaping?: string;
+    specWriting?: string;
+    taskCreation?: string;
+    implementation?: string;
+    alignment?: string;
+  };
+
+  // Custom adapters (optional - defaults used if not provided)
+  adapters?: Partial<Adapters>;
+}
+
+export interface Adapters {
+  fileSystem: FileSystemAdapter;
+  git: GitAdapter;
+  claude: ClaudeAdapter;
+  ui: UIAdapter;
+}
+```
+
+### SDK Usage Examples
+
+#### Example 1: CLI Usage (Terminal)
+
+```typescript
+// packages/cli/src/commands/execute.ts
+
+import { AgentOS } from '@agent-os/sdk';
+import { TerminalUIAdapter } from '../adapters/TerminalUIAdapter';
+import ora from 'ora';
+import chalk from 'chalk';
+
+export async function executeCommand(options: CommandOptions) {
+  const spinner = ora('Initializing Agent OS...').start();
+
+  const agentOS = new AgentOS({
+    projectDir: options.dir || process.cwd(),
+    profile: options.profile,
+    adapters: {
+      ui: new TerminalUIAdapter(),
+    },
+  });
+
+  // Wire up events to terminal UI
+  agentOS.on('phase:start', ({ phase, itemCount }) => {
+    spinner.text = `${phase}: Processing ${itemCount} items...`;
+  });
+
+  agentOS.on('batch:progress', ({ completed, total, current }) => {
+    spinner.text = `[${completed}/${total}] ${current}`;
+  });
+
+  agentOS.on('session:start', ({ task }) => {
+    spinner.text = chalk.cyan(`Session: ${task.name}`);
+  });
+
+  agentOS.on('interaction:required', async ({ prompt, options, resolve }) => {
+    spinner.stop();
+    const answer = await promptUser(prompt, options);
+    resolve(answer);
+    spinner.start();
+  });
+
+  try {
+    const result = await agentOS.execute({
+      specOnly: options.specOnly,
+      checkpointAt: options.checkpoint,
+    });
+
+    spinner.succeed('Execution complete!');
+    console.log(formatResult(result));
+  } catch (error) {
+    spinner.fail('Execution failed');
+    console.error(chalk.red(error.message));
+    process.exit(1);
+  }
+}
+```
+
+#### Example 2: Electron App Integration
+
+```typescript
+// electron-app/src/main/agent-os-integration.ts
+
+import { AgentOS } from '@agent-os/sdk';
+import { BrowserWindow, ipcMain } from 'electron';
+import { ElectronFileSystemAdapter } from './adapters/ElectronFileSystemAdapter';
+import { ElectronUIAdapter } from './adapters/ElectronUIAdapter';
+
+export class AgentOSIntegration {
+  private agentOS: AgentOS | null = null;
+  private mainWindow: BrowserWindow;
+
+  constructor(mainWindow: BrowserWindow) {
+    this.mainWindow = mainWindow;
+    this.setupIPC();
+  }
+
+  private setupIPC() {
+    ipcMain.handle('agent-os:init', async (_, projectDir: string) => {
+      this.agentOS = new AgentOS({
+        projectDir,
+        adapters: {
+          fileSystem: new ElectronFileSystemAdapter(),
+          ui: new ElectronUIAdapter(this.mainWindow),
+        },
+      });
+
+      // Forward all events to renderer process
+      this.agentOS.on('*', (eventName, data) => {
+        this.mainWindow.webContents.send('agent-os:event', { eventName, data });
+      });
+
+      return { success: true };
+    });
+
+    ipcMain.handle('agent-os:execute', async (_, options) => {
+      if (!this.agentOS) throw new Error('AgentOS not initialized');
+      return this.agentOS.execute(options);
+    });
+
+    ipcMain.handle('agent-os:cancel', async () => {
+      this.agentOS?.cancel();
+    });
+
+    ipcMain.handle('agent-os:get-roadmap', async () => {
+      if (!this.agentOS) throw new Error('AgentOS not initialized');
+      return this.agentOS.getRoadmap();
+    });
+  }
+}
+
+// In renderer process (React):
+// electron-app/src/renderer/hooks/useAgentOS.ts
+
+import { useEffect, useState, useCallback } from 'react';
+import { ipcRenderer } from 'electron';
+
+export function useAgentOS() {
+  const [status, setStatus] = useState<'idle' | 'running' | 'error'>('idle');
+  const [progress, setProgress] = useState<Progress | null>(null);
+  const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
+
+  useEffect(() => {
+    const handleEvent = (_, { eventName, data }) => {
+      switch (eventName) {
+        case 'batch:progress':
+          setProgress(data);
+          break;
+        case 'execute:complete':
+          setStatus('idle');
+          break;
+        case 'execute:error':
+          setStatus('error');
+          break;
+      }
+    };
+
+    ipcRenderer.on('agent-os:event', handleEvent);
+    return () => ipcRenderer.off('agent-os:event', handleEvent);
+  }, []);
+
+  const execute = useCallback(async (projectDir: string, options?: ExecuteOptions) => {
+    await ipcRenderer.invoke('agent-os:init', projectDir);
+    setStatus('running');
+    return ipcRenderer.invoke('agent-os:execute', options);
+  }, []);
+
+  const cancel = useCallback(() => {
+    ipcRenderer.invoke('agent-os:cancel');
+  }, []);
+
+  return { status, progress, roadmap, execute, cancel };
+}
+```
+
+#### Example 3: Web Application (with Backend Proxy)
+
+```typescript
+// web-app/src/services/AgentOSService.ts
+
+import { AgentOSEvents } from '@agent-os/sdk';
+
+/**
+ * Web client that communicates with a backend Agent OS server.
+ * The server runs the actual SDK; the client receives events via WebSocket.
+ */
+export class AgentOSWebClient {
+  private ws: WebSocket;
+  private listeners: Map<string, Set<Function>> = new Map();
+
+  constructor(serverUrl: string) {
+    this.ws = new WebSocket(serverUrl);
+    this.ws.onmessage = (event) => {
+      const { eventName, data } = JSON.parse(event.data);
+      this.emit(eventName, data);
+    };
+  }
+
+  on<K extends keyof AgentOSEvents>(
+    event: K,
+    callback: (data: AgentOSEvents[K]) => void
+  ): void {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, new Set());
+    }
+    this.listeners.get(event)!.add(callback);
+  }
+
+  private emit(eventName: string, data: any): void {
+    const callbacks = this.listeners.get(eventName);
+    callbacks?.forEach(cb => cb(data));
+  }
+
+  async execute(projectId: string, options?: ExecuteOptions): Promise<void> {
+    this.ws.send(JSON.stringify({
+      action: 'execute',
+      projectId,
+      options
+    }));
+  }
+
+  async cancel(): Promise<void> {
+    this.ws.send(JSON.stringify({ action: 'cancel' }));
+  }
+}
+
+// React hook for web app
+export function useAgentOSWeb(serverUrl: string) {
+  const [client] = useState(() => new AgentOSWebClient(serverUrl));
+  const [progress, setProgress] = useState<Progress | null>(null);
+
+  useEffect(() => {
+    client.on('batch:progress', setProgress);
+    client.on('interaction:required', async (data) => {
+      // Show modal dialog, then send response back
+      const answer = await showInteractionDialog(data);
+      client.respond(data.interactionId, answer);
+    });
+  }, [client]);
+
+  return { client, progress };
+}
+```
+
+#### Example 4: Headless/CI Usage
+
+```typescript
+// ci-script/run-agent-os.ts
+
+import { AgentOS } from '@agent-os/sdk';
+
+/**
+ * Headless adapter that auto-responds to interactions.
+ * Useful for CI/CD pipelines where human input isn't available.
+ */
+class HeadlessUIAdapter implements UIAdapter {
+  private autoResponses: Map<string, string>;
+
+  constructor(responses: Record<string, string>) {
+    this.autoResponses = new Map(Object.entries(responses));
+  }
+
+  async prompt(options: PromptOptions): Promise<string> {
+    const response = this.autoResponses.get(options.name);
+    if (!response) {
+      throw new Error(`No auto-response configured for: ${options.name}`);
+    }
+    return response;
+  }
+
+  async confirm(message: string): Promise<boolean> {
+    // In CI, default to proceeding
+    console.log(`[AUTO-CONFIRM] ${message}`);
+    return true;
+  }
+
+  showProgress(options: ProgressOptions): ProgressHandle {
+    console.log(`[PROGRESS] ${options.message}`);
+    return {
+      update: (msg) => console.log(`[PROGRESS] ${msg}`),
+      complete: () => console.log('[COMPLETE]'),
+      fail: (err) => console.error(`[FAILED] ${err}`),
+    };
+  }
+
+  info(message: string): void { console.log(`[INFO] ${message}`); }
+  warn(message: string): void { console.warn(`[WARN] ${message}`); }
+  error(message: string): void { console.error(`[ERROR] ${message}`); }
+}
+
+// CI script
+async function main() {
+  const agentOS = new AgentOS({
+    projectDir: process.env.PROJECT_DIR!,
+    profile: 'default',
+    adapters: {
+      ui: new HeadlessUIAdapter({
+        'auth-method': 'JWT with refresh tokens',
+        'mfa-support': 'yes',
+      }),
+    },
+    orchestration: {
+      maxConcurrency: 2,  // Be conservative in CI
+    },
+  });
+
+  agentOS.on('execute:error', ({ error }) => {
+    console.error('Execution failed:', error);
+    process.exit(1);
+  });
+
+  await agentOS.execute({ specOnly: true });
+  console.log('Specs generated successfully');
+}
+
+main();
+```
+
+---
+
+## Embedding Considerations
+
+### Environment Compatibility Matrix
+
+| Feature | Node.js (CLI) | Electron (Main) | Electron (Renderer) | Browser (Direct) | Browser (via Server) |
+|---------|--------------|-----------------|---------------------|------------------|---------------------|
+| **File System** | Native `fs` | Native `fs` | Via IPC to main | ❌ No access | Via API |
+| **Git Operations** | `simple-git` | `simple-git` | Via IPC to main | `isomorphic-git` | Via API |
+| **Claude SDK** | Direct | Direct | Via IPC to main | ❌ CORS issues | Via API |
+| **Process Spawning** | Native | Native | Via IPC to main | ❌ No access | Via API |
+| **State Persistence** | File system | File system | Via IPC to main | IndexedDB/localStorage | Via API |
+
+### Electron Integration
+
+Electron apps run the SDK in the **main process** (Node.js) and communicate with the renderer (browser) via IPC:
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                        ELECTRON APP                               │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │                    MAIN PROCESS (Node.js)                    │ │
+│  │                                                              │ │
+│  │   @agent-os/sdk                                              │ │
+│  │   ├── Uses native fs                                         │ │
+│  │   ├── Uses simple-git                                        │ │
+│  │   ├── Connects to Claude API directly                        │ │
+│  │   └── Emits events → forwarded to renderer                   │ │
+│  │                                                              │ │
+│  │   ipcMain.handle('agent-os:*', ...) ◄────────────┐           │ │
+│  │                                                   │           │ │
+│  └───────────────────────────────────────────────────┼──────────┘ │
+│                                                      │ IPC        │
+│  ┌───────────────────────────────────────────────────┼──────────┐ │
+│  │                  RENDERER PROCESS (Browser)       │          │ │
+│  │                                                   ▼          │ │
+│  │   React/Vue/Svelte UI                                        │ │
+│  │   ├── ipcRenderer.invoke('agent-os:execute', ...)            │ │
+│  │   ├── ipcRenderer.on('agent-os:event', ...)                  │ │
+│  │   └── Displays progress, handles user interactions           │ │
+│  │                                                              │ │
+│  └──────────────────────────────────────────────────────────────┘ │
+│                                                                   │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+**Key Considerations for Electron:**
+
+1. **Context Isolation** - Use `contextBridge` to safely expose IPC handlers
+2. **Security** - Validate all IPC arguments; don't expose raw file system access
+3. **Cancellation** - Support canceling long-running operations from UI
+4. **Memory** - Large state objects should be passed by reference or chunked
+
+```typescript
+// Electron preload script for secure IPC exposure
+// electron-app/src/preload.ts
+
+import { contextBridge, ipcRenderer } from 'electron';
+
+contextBridge.exposeInMainWorld('agentOS', {
+  execute: (options) => ipcRenderer.invoke('agent-os:execute', options),
+  cancel: () => ipcRenderer.invoke('agent-os:cancel'),
+  getRoadmap: () => ipcRenderer.invoke('agent-os:get-roadmap'),
+
+  onEvent: (callback) => {
+    const handler = (_, data) => callback(data);
+    ipcRenderer.on('agent-os:event', handler);
+    return () => ipcRenderer.off('agent-os:event', handler);
+  },
+});
+
+// Type declarations for renderer
+declare global {
+  interface Window {
+    agentOS: {
+      execute: (options?: ExecuteOptions) => Promise<ExecutionResult>;
+      cancel: () => Promise<void>;
+      getRoadmap: () => Promise<Roadmap>;
+      onEvent: (callback: (event: AgentOSEvent) => void) => () => void;
+    };
+  }
+}
+```
+
+### Web Application Integration
+
+For web applications, the SDK runs on a **backend server** with the web client connecting via WebSocket or HTTP:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           WEB ARCHITECTURE                               │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  ┌─────────────────────┐          ┌─────────────────────────────────┐   │
+│  │   BROWSER CLIENT    │          │        BACKEND SERVER            │   │
+│  │                     │          │                                  │   │
+│  │  React/Vue UI       │  WS/HTTP │  Express/Fastify                 │   │
+│  │  ├─ WebSocket ─────────────────►  ├─ @agent-os/sdk               │   │
+│  │  │  connection      │          │  │  ├─ Full Node.js env         │   │
+│  │  │                  │◄─────────┤  │  ├─ Native fs access         │   │
+│  │  ├─ Receives events │  Events  │  │  ├─ Git operations           │   │
+│  │  │                  │          │  │  └─ Claude API               │   │
+│  │  └─ Sends commands  │          │  │                              │   │
+│  │     (execute,       │          │  └─ Manages multiple projects   │   │
+│  │      cancel, etc.)  │          │      per user                   │   │
+│  │                     │          │                                  │   │
+│  └─────────────────────┘          └─────────────────────────────────┘   │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Backend Server Implementation:**
+
+```typescript
+// web-server/src/server.ts
+
+import { WebSocketServer } from 'ws';
+import { AgentOS } from '@agent-os/sdk';
+
+const wss = new WebSocketServer({ port: 8080 });
+
+// Track active sessions per connection
+const sessions = new Map<WebSocket, AgentOS>();
+
+wss.on('connection', (ws) => {
+  ws.on('message', async (message) => {
+    const { action, projectId, options } = JSON.parse(message.toString());
+
+    switch (action) {
+      case 'init': {
+        const projectDir = getProjectDir(projectId); // Map project ID to path
+        const agentOS = new AgentOS({ projectDir });
+
+        // Forward all events to client
+        agentOS.on('*', (eventName, data) => {
+          ws.send(JSON.stringify({ type: 'event', eventName, data }));
+        });
+
+        // Handle interaction requests
+        agentOS.on('interaction:required', async ({ prompt, resolve, reject }) => {
+          const interactionId = generateId();
+          pendingInteractions.set(interactionId, { resolve, reject });
+          ws.send(JSON.stringify({
+            type: 'interaction',
+            interactionId,
+            prompt,
+          }));
+        });
+
+        sessions.set(ws, agentOS);
+        ws.send(JSON.stringify({ type: 'ready' }));
+        break;
+      }
+
+      case 'execute': {
+        const agentOS = sessions.get(ws);
+        if (!agentOS) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Not initialized' }));
+          return;
+        }
+        try {
+          const result = await agentOS.execute(options);
+          ws.send(JSON.stringify({ type: 'result', result }));
+        } catch (error) {
+          ws.send(JSON.stringify({ type: 'error', message: error.message }));
+        }
+        break;
+      }
+
+      case 'respond': {
+        const { interactionId, answer } = options;
+        const interaction = pendingInteractions.get(interactionId);
+        if (interaction) {
+          interaction.resolve(answer);
+          pendingInteractions.delete(interactionId);
+        }
+        break;
+      }
+
+      case 'cancel': {
+        sessions.get(ws)?.cancel();
+        break;
+      }
+    }
+  });
+
+  ws.on('close', () => {
+    sessions.get(ws)?.cancel();
+    sessions.delete(ws);
+  });
+});
+```
+
+### VS Code Extension Integration
+
+VS Code extensions run in a Node.js environment with access to the VS Code API:
+
+```typescript
+// vscode-extension/src/extension.ts
+
+import * as vscode from 'vscode';
+import { AgentOS } from '@agent-os/sdk';
+
+class VSCodeUIAdapter implements UIAdapter {
+  async prompt(options: PromptOptions): Promise<string> {
+    const result = await vscode.window.showInputBox({
+      prompt: options.message,
+      placeHolder: options.placeholder,
+    });
+    if (result === undefined) throw new Error('User cancelled');
+    return result;
+  }
+
+  async select(options: SelectOptions): Promise<string> {
+    const result = await vscode.window.showQuickPick(options.choices, {
+      placeHolder: options.message,
+    });
+    if (!result) throw new Error('User cancelled');
+    return result;
+  }
+
+  async confirm(message: string): Promise<boolean> {
+    const result = await vscode.window.showInformationMessage(
+      message,
+      'Yes', 'No'
+    );
+    return result === 'Yes';
+  }
+
+  showProgress(options: ProgressOptions): ProgressHandle {
+    let resolve: () => void;
+    const promise = new Promise<void>(r => resolve = r);
+
+    vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: options.message,
+        cancellable: true,
+      },
+      async (progress, token) => {
+        token.onCancellationRequested(() => {
+          // Handle cancellation
+        });
+        await promise;
+      }
+    );
+
+    return {
+      update: (msg) => { /* Update progress */ },
+      complete: () => resolve(),
+      fail: () => resolve(),
+    };
+  }
+
+  info(message: string): void {
+    vscode.window.showInformationMessage(message);
+  }
+
+  warn(message: string): void {
+    vscode.window.showWarningMessage(message);
+  }
+
+  error(message: string): void {
+    vscode.window.showErrorMessage(message);
+  }
+}
+
+export function activate(context: vscode.ExtensionContext) {
+  const outputChannel = vscode.window.createOutputChannel('Agent OS');
+
+  const executeCommand = vscode.commands.registerCommand(
+    'agent-os.execute',
+    async () => {
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
+        vscode.window.showErrorMessage('No workspace folder open');
+        return;
+      }
+
+      const agentOS = new AgentOS({
+        projectDir: workspaceFolder.uri.fsPath,
+        adapters: {
+          ui: new VSCodeUIAdapter(),
+        },
+      });
+
+      agentOS.on('session:progress', ({ message }) => {
+        outputChannel.appendLine(message);
+      });
+
+      try {
+        await agentOS.execute();
+        vscode.window.showInformationMessage('Agent OS execution complete');
+      } catch (error) {
+        vscode.window.showErrorMessage(`Agent OS failed: ${error.message}`);
+      }
+    }
+  );
+
+  context.subscriptions.push(executeCommand);
+}
+```
+
+### Browser-Only Mode (Experimental)
+
+For scenarios where a backend isn't available, a limited browser-only mode could work with:
+- **Virtual file system** (in-memory or IndexedDB-backed)
+- **isomorphic-git** for Git operations on the virtual FS
+- **Proxy server** for Claude API calls (to avoid CORS)
+
+This mode is **not recommended** for production but useful for:
+- Demos and tutorials
+- Offline experimentation
+- Sandboxed environments
+
+```typescript
+// Browser-only experimental setup
+import { AgentOS } from '@agent-os/sdk';
+import { BrowserFileSystemAdapter } from '@agent-os/sdk/adapters/browser';
+import { IsomorphicGitAdapter } from '@agent-os/sdk/adapters/isomorphic-git';
+import { ProxiedClaudeAdapter } from '@agent-os/sdk/adapters/proxied-claude';
+
+const agentOS = new AgentOS({
+  projectDir: '/virtual/project',  // Virtual path
+  adapters: {
+    fileSystem: new BrowserFileSystemAdapter({
+      backend: 'indexeddb',  // or 'memory'
+    }),
+    git: new IsomorphicGitAdapter({
+      fs: browserFS,
+      corsProxy: 'https://cors-proxy.example.com',
+    }),
+    claude: new ProxiedClaudeAdapter({
+      proxyUrl: 'https://api-proxy.example.com/claude',
+    }),
+    ui: new BrowserUIAdapter(),
+  },
+});
 ```
 
 ---
@@ -976,85 +2092,122 @@ $ agent-os spec --parallel
 
 ## Implementation Phases
 
-### Phase 1: Foundation
+### Phase 1: Foundation & Monorepo Setup
 
-**Goal:** Basic TypeScript project with profile installation
+**Goal:** Set up monorepo structure with SDK and CLI packages
 
-1. Initialize TypeScript project with proper config
-2. Implement `ProfileInstaller` - copies agents/standards/schemas to target project
-3. Implement `StateManager` - read/write JSON state files
-4. Create prompt template system from existing commands
-5. Basic CLI with `install` command
+1. Initialize monorepo with Turborepo/npm workspaces
+2. Create `@agent-os/sdk` package with core types and interfaces
+3. Create `@agent-os/cli` package with basic CLI scaffolding
+4. Define adapter interfaces (`FileSystemAdapter`, `GitAdapter`, `UIAdapter`, `ClaudeAdapter`)
+5. Implement Node.js default adapters for SDK
+6. Set up build pipeline with tsup for both packages
 
 **Deliverables:**
-- `agent-os install` works
-- Agents appear in target project's `.claude/agents/`
-- Standards appear in target project's `agent-os/standards/`
-- State files initialized in `agent-os/product/`
-- Prompt templates loaded from `src/prompts/templates/`
+- Monorepo structure with `packages/sdk` and `packages/cli`
+- SDK exports clean public API (`AgentOS`, adapters, types)
+- CLI can import and use SDK
+- Build produces both ESM and CJS bundles
+- Type declarations generated correctly
 
-### Phase 2: Session Management
+### Phase 2: Event System & Core SDK
+
+**Goal:** Implement event-driven architecture for SDK
+
+1. Implement typed `EventEmitter` with full event catalog
+2. Implement `StateManager` using `FileSystemAdapter` (not direct `fs`)
+3. Implement `ProfileInstaller` and `ProfileLoader` in SDK
+4. Create prompt template system with bundled templates
+5. Export all SDK functionality through clean API
+
+**Deliverables:**
+- SDK emits typed events for all operations
+- Host applications can subscribe to events
+- State operations work through adapter abstraction
+- `agentOS.installProfile()` works from SDK
+- Prompt templates bundled with SDK package
+
+### Phase 3: Session Management
 
 **Goal:** Spawn and manage Claude Code sessions via SDK
 
 1. Implement `SessionManager` with Claude Agent SDK integration
 2. Implement `PromptBuilder` - constructs prompts from templates with variable interpolation
 3. Create fresh session pattern (one session per task)
-4. Add session result parsing and error handling
-5. Implement basic retry logic
+4. Session events emitted for progress tracking
+5. Implement basic retry logic with exponential backoff
 
 **Deliverables:**
-- Can spawn Claude Code session with custom prompt from template
-- Session runs against target project directory (where agents are installed)
-- Claude Code reads `.claude/agents/` for behavioral guidance
-- Results captured and parsed
+- SDK can spawn Claude Code sessions programmatically
+- Sessions emit `session:start`, `session:progress`, `session:complete` events
+- Session runs against target project directory
+- Results captured, parsed, and returned
 
-### Phase 3: Lifecycle Phases (Week 5-6)
+### Phase 4: CLI Integration Layer
+
+**Goal:** Build CLI on top of SDK
+
+1. Implement `TerminalUIAdapter` for interactive terminal UI
+2. Wire CLI commands to SDK methods
+3. Implement progress visualization (spinners, progress bars)
+4. Add interactive prompts for user input
+5. Handle `interaction:required` events from SDK
+
+**Deliverables:**
+- `agent-os install` works (uses SDK)
+- Terminal shows spinners and progress
+- Interactive prompts work for shaping phase
+- Clean error handling and user feedback
+
+### Phase 5: Lifecycle Phases
 
 **Goal:** Orchestrate planning, specification, implementation phases
 
 1. Implement `PlanningPhase` - roadmap creation
 2. Implement `SpecificationPhase` - shaping and spec writing
 3. Implement `ImplementationPhase` - task execution with fresh sessions
-4. Add CLI commands for each phase
-5. Implement progress tracking and reporting
+4. All phases emit appropriate events
+5. Cancellation support throughout
 
 **Deliverables:**
-- `agent-os plan` creates roadmap
-- `agent-os spec` shapes and writes specs
-- `agent-os implement` executes tasks
+- `agentOS.plan()` creates roadmap
+- `agentOS.spec()` shapes and writes specs
+- `agentOS.implement()` executes tasks
+- CLI commands (`agent-os plan`, `agent-os spec`, `agent-os implement`) work
 
-### Phase 4: Batch Processing (Week 7-8)
+### Phase 6: Batch Processing
 
 **Goal:** Parallel execution and batching
 
 1. Implement `BatchProcessor` with configurable concurrency
-2. Add parallel spec writing
+2. Add parallel spec writing with `batch:progress` events
 3. Add parallel task creation
 4. Implement dependency-aware execution ordering
-5. Add progress reporting for parallel operations
+5. Concurrency respects adapter capabilities
 
 **Deliverables:**
-- `agent-os spec --parallel` writes specs concurrently
+- `agentOS.spec({ parallel: true })` writes specs concurrently
+- `batch:start`, `batch:progress`, `batch:complete` events emitted
 - Multiple Claude sessions run simultaneously
 - Dependencies respected in execution order
 
-### Phase 5: Alignment & Checkpoints (Week 9-10)
+### Phase 7: Alignment & Checkpoints
 
 **Goal:** Cross-spec coordination and drift detection
 
 1. Implement `AlignmentPhase` - spec and task alignment
-2. Add checkpoint system with user approval
+2. Add checkpoint system with `interaction:required` events
 3. Implement drift detection during execution
 4. Add risk-based autonomy (low risk = auto-resolve)
-5. Add cascade change checking
+5. Emit `drift:detected` and `alignment:conflict` events
 
 **Deliverables:**
-- `agent-os align --specs` reviews all specs
-- Checkpoints pause for user input
+- `agentOS.align('specs')` reviews all specs
+- Checkpoints emit events for host to handle
 - Drift detected and classified by severity
+- CLI shows alignment UI, SDK emits events
 
-### Phase 6: Full Execution & Polish (Week 11-12)
+### Phase 8: Full Execution & Polish
 
 **Goal:** End-to-end autonomous execution
 
@@ -1062,12 +2215,29 @@ $ agent-os spec --parallel
 2. Add resume capability from any state
 3. Implement comprehensive error handling
 4. Add detailed logging and reporting
-5. Documentation and examples
+5. Documentation and examples for both SDK and CLI
 
 **Deliverables:**
-- `agent-os execute` runs full workflow
+- `agentOS.execute()` runs full workflow
 - Interrupted runs resume cleanly
-- Comprehensive documentation
+- Comprehensive SDK documentation
+- Example integrations (Electron, VS Code, Web)
+
+### Phase 9: Optional Adapters & Browser Support
+
+**Goal:** Alternative adapters for non-Node environments
+
+1. Implement `BrowserFileSystemAdapter` (IndexedDB-backed)
+2. Implement `IsomorphicGitAdapter` wrapper
+3. Implement `ProxiedClaudeAdapter` for CORS workarounds
+4. Test in Electron renderer process
+5. Create example Electron app
+
+**Deliverables:**
+- SDK works in Electron main process out of the box
+- Optional adapters available for browser environments
+- Example Electron app demonstrates integration
+- Documentation for embedding in different environments
 
 ---
 
@@ -1122,24 +2292,120 @@ $ agent-os spec --parallel
 
 ## Dependencies
 
-### NPM Packages
+### Monorepo Structure
+
+The project uses npm workspaces (or pnpm/yarn workspaces) for package management:
 
 ```json
+// Root package.json
 {
-  "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.14",
-    "commander": "^12.0.0",
-    "ajv": "^8.12.0",
-    "glob": "^10.3.0",
-    "fs-extra": "^11.2.0",
-    "chalk": "^5.3.0",
-    "ora": "^8.0.0"
+  "name": "agent-os",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "dev": "turbo run dev"
   },
   "devDependencies": {
-    "typescript": "^5.3.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.3.0"
+  }
+}
+```
+
+### SDK Package (@agent-os/sdk)
+
+```json
+// packages/sdk/package.json
+{
+  "name": "@agent-os/sdk",
+  "version": "1.0.0",
+  "description": "Agent OS SDK - Embeddable AI orchestration library",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./adapters/*": {
+      "import": "./dist/adapters/*.mjs",
+      "require": "./dist/adapters/*.js",
+      "types": "./dist/adapters/*.d.ts"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "sideEffects": false,
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.14",
+    "ajv": "^8.12.0",
+    "glob": "^10.3.0",
+    "simple-git": "^3.22.0",
+    "eventemitter3": "^5.0.0"
+  },
+  "devDependencies": {
     "@types/node": "^20.0.0",
-    "vitest": "^1.2.0",
-    "tsx": "^4.7.0"
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  },
+  "peerDependencies": {
+    "isomorphic-git": "^1.25.0"
+  },
+  "peerDependenciesMeta": {
+    "isomorphic-git": {
+      "optional": true
+    }
+  }
+}
+```
+
+### CLI Package (@agent-os/cli)
+
+```json
+// packages/cli/package.json
+{
+  "name": "@agent-os/cli",
+  "version": "1.0.0",
+  "description": "Agent OS CLI - Command-line interface for AI orchestration",
+  "bin": {
+    "agent-os": "./dist/index.js"
+  },
+  "files": ["dist", "README.md"],
+  "dependencies": {
+    "@agent-os/sdk": "workspace:*",
+    "commander": "^12.0.0",
+    "chalk": "^5.3.0",
+    "ora": "^8.0.0",
+    "inquirer": "^9.2.0",
+    "cli-table3": "^0.6.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  }
+}
+```
+
+### Optional Adapters
+
+For browser/Electron environments, additional packages may be needed:
+
+```json
+// Optional dependencies for different environments
+{
+  "optionalDependencies": {
+    "isomorphic-git": "^1.25.0",      // Browser git operations
+    "lightning-fs": "^4.4.0",          // IndexedDB-backed filesystem
+    "memfs": "^4.6.0"                  // In-memory filesystem
   }
 }
 ```
