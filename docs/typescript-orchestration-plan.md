@@ -12,8 +12,8 @@ This plan outlines converting Agent OS from a pure markdown/YAML documentation s
 
 1. **TypeScript handles orchestration** - Batching, lifecycle management, and task execution happen in TypeScript, not Claude Code slash commands
 2. **Fresh sessions per task group** - Implements the [Ralph Wiggum strategy](https://github.com/frankbria/ralph-claude-code) where each task group executes in a clean context window
-3. **Skills/Agents as physical files** - Claude Code reads skill definitions from the project directory, enabling dynamic prompt injection
-4. **Prompts flow through SDK** - Commands like `/write-spec` become TypeScript functions that inject prompts into fresh Claude Code sessions
+3. **Prompt templates in TypeScript** - Commands like `/write-spec` become prompt templates stored in the TypeScript project and sent via the Agent SDK
+4. **Skills/Agents as project files** - Claude Code reads skill/agent definitions from the target project's `.claude/` directory for behavioral guidance during execution
 
 ---
 
@@ -80,10 +80,17 @@ agent-os/
 │   │   ├── SpecificationPhase.ts  # Spec shaping/writing orchestration
 │   │   ├── ImplementationPhase.ts # Task execution orchestration
 │   │   └── AlignmentPhase.ts      # Cross-spec alignment checks
-│   ├── prompts/
+│   ├── prompts/                   # ★ PROMPT TEMPLATES (sent via SDK)
 │   │   ├── PromptBuilder.ts       # Constructs prompts from templates
 │   │   ├── PromptRegistry.ts      # Maps commands to prompt templates
-│   │   └── templates/             # Prompt templates (from current commands)
+│   │   └── templates/             # The actual prompt templates
+│   │       ├── plan-product.md    # Roadmap creation prompt
+│   │       ├── shape-spec.md      # Requirements gathering prompt
+│   │       ├── write-spec.md      # Spec writing prompt
+│   │       ├── create-tasks.md    # Task breakdown prompt
+│   │       ├── implement-tasks.md # Implementation prompt
+│   │       ├── align-specs.md     # Cross-spec alignment prompt
+│   │       └── review-findings.md # Findings review prompt
 │   ├── profiles/
 │   │   ├── ProfileInstaller.ts    # Installs profiles into projects
 │   │   └── ProfileLoader.ts       # Loads profile configurations
@@ -91,27 +98,48 @@ agent-os/
 │       ├── FileSystem.ts          # File operations
 │       ├── GitOperations.ts       # Git state tracking
 │       └── Logger.ts              # Structured logging
-├── profiles/                      # Existing profile definitions
+├── profiles/                      # Profile definitions (installed to projects)
 │   ├── default/
-│   │   ├── skills/                # NEW: Skills as files for Claude Code
-│   │   │   ├── shape-spec.md      # Skill definition
-│   │   │   ├── write-spec.md
-│   │   │   ├── create-tasks.md
-│   │   │   └── implement-tasks.md
-│   │   ├── agents/                # Agent definitions (existing)
-│   │   ├── workflows/             # Workflow docs (existing)
-│   │   └── schemas/               # JSON schemas (existing)
+│   │   ├── agents/                # Agent behavior definitions
+│   │   │   ├── implementer.md     # How to implement code
+│   │   │   ├── spec-writer.md     # How to write specs
+│   │   │   └── ...
+│   │   ├── workflows/             # Workflow reference docs
+│   │   ├── standards/             # Coding standards
+│   │   └── schemas/               # JSON schemas for validation
 │   └── rails-apps/
-├── installed/                     # Template for project installation
-│   └── agent-os/
-│       ├── .claude/
-│       │   └── skills/            # Claude Code reads skills from here
-│       ├── product/               # Product state files
-│       └── specs/                 # Spec directories
+│       ├── agents/                # Rails-specific agents
+│       └── standards/             # Rails coding standards
 ├── package.json
 ├── tsconfig.json
 └── README.md
+
+# When installed into a target project:
+target-project/
+├── .claude/
+│   ├── agents/                    # ★ Claude Code reads these during execution
+│   │   ├── implementer.md         # Behavioral guidance for implementation
+│   │   ├── spec-writer.md         # Behavioral guidance for spec writing
+│   │   └── ...
+│   └── settings.json              # Claude Code configuration
+├── agent-os/
+│   ├── product/                   # State files
+│   │   ├── roadmap.json
+│   │   ├── mission.md
+│   │   └── findings.json
+│   ├── specs/                     # Spec directories
+│   └── standards/                 # Coding standards (referenced by agents)
+└── agent-os.config.json           # Orchestrator configuration
 ```
+
+### Key Distinction: Prompt Templates vs Agent Files
+
+| Component | Location | Purpose | Used By |
+|-----------|----------|---------|---------|
+| **Prompt Templates** | `src/prompts/templates/` | Commands sent to Claude via SDK | TypeScript Orchestrator |
+| **Agent Files** | `.claude/agents/` in target project | Behavioral guidance during execution | Claude Code |
+| **Standards** | `agent-os/standards/` in target project | Coding standards referenced by agents | Claude Code |
+| **Workflows** | Referenced in prompt templates | Step-by-step procedures | Embedded in prompts |
 
 ### The Ralph Wiggum Pattern in TypeScript
 
@@ -208,17 +236,14 @@ class ProfileInstaller {
 }
 ```
 
-### 2. Skills as Physical Files
+### 2. Prompt Templates in TypeScript
 
-Skills replace slash commands. Claude Code reads them from `.claude/skills/`:
+Prompt templates are stored in the TypeScript project and sent to Claude Code via the Agent SDK. They are NOT installed into target projects.
 
-```markdown
-<!-- .claude/skills/shape-spec.md -->
----
-name: shape-spec
-description: Gather requirements for a roadmap item through interactive Q&A
----
+```typescript
+// src/prompts/templates/shape-spec.md (stored as string or file in TS project)
 
+const SHAPE_SPEC_TEMPLATE = `
 # Shape Specification
 
 You are a product requirements specialist. Your task is to gather detailed
@@ -226,18 +251,25 @@ requirements for the specified roadmap item through structured Q&A.
 
 ## Context Files to Read
 
-1. `agent-os/product/roadmap.json` - Current roadmap
-2. `agent-os/product/mission.md` - Product vision
-3. `agent-os/product/tech-stack.md` - Technical decisions
-4. `agent-os/product/findings.json` - Institutional knowledge
+1. \`agent-os/product/roadmap.json\` - Current roadmap
+2. \`agent-os/product/mission.md\` - Product vision
+3. \`agent-os/product/tech-stack.md\` - Technical decisions
+4. \`agent-os/product/findings.json\` - Institutional knowledge
+
+## Your Task
+
+Shape roadmap item: {{roadmapItemId}}
+- Title: {{item.title}}
+- Description: {{item.description}}
+- Dependencies: {{item.dependencies}}
 
 ## Process
 
-1. Read the specified roadmap item
+1. Read the specified roadmap item from roadmap.json
 2. Read any related specs (items this depends on)
 3. Generate 5-10 clarifying questions organized by category
 4. Collect answers through conversation
-5. Write structured requirements to `agent-os/specs/{date}-{slug}/planning/requirements.md`
+5. Write structured requirements to \`agent-os/specs/{{specPath}}/planning/requirements.md\`
 6. Update spec-meta.json with status: "shaped"
 
 ## Output Format
@@ -248,21 +280,107 @@ Create a requirements.md with sections:
 - Technical Requirements
 - Edge Cases & Error Handling
 - Open Questions
+`;
 ```
 
-The orchestrator injects these skills by reference:
+The orchestrator builds and sends the prompt:
 
 ```typescript
-// Prompt sent to Claude Code session
-const prompt = `
-You have access to the skill "shape-spec" defined in .claude/skills/shape-spec.md.
+// src/prompts/PromptBuilder.ts
 
-Execute the shape-spec skill for roadmap item: ${roadmapItemId}
+class PromptBuilder {
+  private templates: Map<string, string>;
 
-Context:
-- Roadmap item title: ${item.title}
-- Dependencies: ${item.dependencies.join(', ')}
-- Tags: ${item.tags.join(', ')}
+  constructor() {
+    // Load templates from src/prompts/templates/
+    this.templates = this.loadTemplates();
+  }
+
+  build(templateName: string, variables: Record<string, any>): string {
+    const template = this.templates.get(templateName);
+    if (!template) throw new Error(`Template ${templateName} not found`);
+
+    // Replace {{variable}} placeholders
+    return template.replace(/\{\{(\w+(?:\.\w+)*)\}\}/g, (_, path) => {
+      return this.getNestedValue(variables, path) ?? '';
+    });
+  }
+}
+
+// Usage in orchestrator
+const prompt = promptBuilder.build('shape-spec', {
+  roadmapItemId: 'roadmap-001',
+  item: roadmapItem,
+  specPath: '2026-01-21-auth',
+});
+
+// Send via Claude Agent SDK
+const session = query({ prompt, options: { workingDirectory: projectDir } });
+```
+
+### 3. Agent Files in Target Projects
+
+Agent files are installed into target projects' `.claude/agents/` directory. These provide **behavioral guidance** that Claude Code reads during execution - they're NOT the commands themselves.
+
+```markdown
+<!-- Installed to: target-project/.claude/agents/implementer.md -->
+---
+name: implementer
+description: Expert software engineer implementing tasks
+---
+
+# Implementer Agent
+
+You are an expert software engineer. When implementing tasks:
+
+## Core Principles
+
+1. **Execute, don't plan** - Write actual code, not descriptions
+2. **TDD when specified** - Write tests before implementation
+3. **One task at a time** - Complete each before moving on
+4. **Verify with tests** - Run tests after each change
+
+## Standards to Follow
+
+Read and apply standards from:
+- \`agent-os/standards/global/\` - Universal standards
+- \`agent-os/standards/backend/\` - Backend-specific (if applicable)
+- \`agent-os/standards/frontend/\` - Frontend-specific (if applicable)
+
+## Task Completion
+
+A task is complete when:
+- Code compiles without errors
+- Tests pass (if applicable)
+- tasks.json status updated to "completed"
+```
+
+The orchestrator's prompt can reference these agents:
+
+```typescript
+// The prompt template references the agent
+const IMPLEMENT_TASKS_TEMPLATE = `
+You are acting as the "implementer" agent defined in .claude/agents/implementer.md.
+Read that file to understand your behavioral guidelines.
+
+## Your Task
+
+Implement task group "{{taskGroup.name}}" ({{taskGroup.id}}) for spec {{specId}}.
+
+## Files to Read
+
+1. .claude/agents/implementer.md - Your behavioral guidelines
+2. agent-os/specs/{{specId}}/spec.md - The specification
+3. agent-os/specs/{{specId}}/tasks.json - Task breakdown
+4. agent-os/standards/ - Coding standards to follow
+
+## Task Group Details
+
+{{taskGroupJson}}
+
+## Instructions
+
+Follow the implementer agent guidelines and complete all tasks in this group.
 `;
 ```
 
@@ -466,39 +584,48 @@ class ImplementationPhase {
     taskGroup: TaskGroup,
     specId: string
   ): string {
-    // Prompt includes:
-    // 1. Reference to skill file
-    // 2. Specific task group to implement
-    // 3. Paths to read for context
-    // 4. Completion criteria
+    // Load and populate the prompt template
+    return this.promptBuilder.build('implement-tasks', {
+      taskGroup,
+      specId,
+      taskGroupJson: JSON.stringify(taskGroup, null, 2),
+    });
+  }
+}
 
-    return `
-You have access to the skill "implement-tasks" in .claude/skills/implement-tasks.md.
+// Example: src/prompts/templates/implement-tasks.md
+const IMPLEMENT_TASKS_TEMPLATE = `
+# Implementation Task
+
+You are acting as the "implementer" agent. Read .claude/agents/implementer.md for behavioral guidelines.
 
 ## Your Task
 
-Implement task group "${taskGroup.name}" (${taskGroup.id}) for spec ${specId}.
+Implement task group "{{taskGroup.name}}" ({{taskGroup.id}}) for spec {{specId}}.
 
 ## Context to Read
 
-1. Spec: agent-os/specs/${specId}/spec.md
-2. Tasks: agent-os/specs/${specId}/tasks.json
-3. Tech Stack: agent-os/product/tech-stack.md
-4. Findings: agent-os/product/findings.json
+1. .claude/agents/implementer.md - Your behavioral guidelines
+2. agent-os/specs/{{specId}}/spec.md - The specification
+3. agent-os/specs/{{specId}}/tasks.json - Task breakdown
+4. agent-os/product/tech-stack.md - Technical decisions
+5. agent-os/product/findings.json - Patterns and gotchas
+6. agent-os/standards/ - Coding standards to follow
 
 ## Task Group Details
 
-${JSON.stringify(taskGroup, null, 2)}
+{{taskGroupJson}}
 
 ## Instructions
 
-1. Read the spec and understand the requirements
-2. Read the task group and its tasks/subtasks
-3. Implement each task in order
-4. Run tests after each significant change
-5. Update tasks.json status after completing each task
-6. Capture any findings (patterns, gotchas, decisions)
-7. Report completion or blockers
+1. Read the implementer agent guidelines
+2. Read the spec and understand the requirements
+3. Read the task group and its tasks/subtasks
+4. Implement each task in order
+5. Run tests after each significant change
+6. Update tasks.json status after completing each task
+7. Capture any findings (patterns, gotchas, decisions)
+8. Report completion or blockers
 
 ## Completion
 
@@ -506,9 +633,7 @@ When ALL tasks in this group are complete:
 1. Update tasks.json with status: "completed"
 2. Write any findings to a temp file for collection
 3. Provide a summary of what was implemented
-`;
-  }
-}
+`;`
 ```
 
 ### 6. State Management
@@ -819,14 +944,23 @@ $ agent-os spec --parallel
 | **Resumability** | Interrupted work can restart from files |
 | **Cost efficiency** | Smaller context windows = lower token costs |
 
-### 2. Why Skills as Files (Not Embedded)?
+### 2. Why Prompt Templates in TypeScript + Agent Files in Project?
 
+**Prompt Templates (in TypeScript):**
 | Benefit | Explanation |
 |---------|-------------|
-| **Editable** | Users can customize skills without rebuilding |
-| **Versionable** | Skills tracked in git with the project |
-| **Profile-specific** | Different profiles have different skills |
-| **Claude Code native** | Aligns with how Claude Code discovers capabilities |
+| **Type-safe** | Template variables validated at compile time |
+| **Testable** | Unit test prompt construction |
+| **Versioned with orchestrator** | Templates evolve with orchestration logic |
+| **Not exposed to users** | Implementation detail, not customization point |
+
+**Agent Files (in target project's `.claude/`):**
+| Benefit | Explanation |
+|---------|-------------|
+| **Customizable** | Users can tweak agent behavior per project |
+| **Versionable** | Tracked in project git |
+| **Profile-specific** | Different profiles install different agents |
+| **Claude Code native** | Claude Code auto-discovers agents in `.claude/` |
 
 ### 3. Why TypeScript Orchestration (Not Bash)?
 
@@ -842,34 +976,37 @@ $ agent-os spec --parallel
 
 ## Implementation Phases
 
-### Phase 1: Foundation (Week 1-2)
+### Phase 1: Foundation
 
 **Goal:** Basic TypeScript project with profile installation
 
 1. Initialize TypeScript project with proper config
-2. Implement `ProfileInstaller` - copies skills/agents/schemas
+2. Implement `ProfileInstaller` - copies agents/standards/schemas to target project
 3. Implement `StateManager` - read/write JSON state files
-4. Create skill file format from existing commands
+4. Create prompt template system from existing commands
 5. Basic CLI with `install` command
 
 **Deliverables:**
 - `agent-os install` works
-- Skills appear in `.claude/skills/`
-- State files created in `agent-os/`
+- Agents appear in target project's `.claude/agents/`
+- Standards appear in target project's `agent-os/standards/`
+- State files initialized in `agent-os/product/`
+- Prompt templates loaded from `src/prompts/templates/`
 
-### Phase 2: Session Management (Week 3-4)
+### Phase 2: Session Management
 
 **Goal:** Spawn and manage Claude Code sessions via SDK
 
 1. Implement `SessionManager` with Claude Agent SDK integration
-2. Implement `PromptBuilder` - constructs prompts from templates
+2. Implement `PromptBuilder` - constructs prompts from templates with variable interpolation
 3. Create fresh session pattern (one session per task)
 4. Add session result parsing and error handling
 5. Implement basic retry logic
 
 **Deliverables:**
-- Can spawn Claude Code session with custom prompt
-- Session reads skills from project directory
+- Can spawn Claude Code session with custom prompt from template
+- Session runs against target project directory (where agents are installed)
+- Claude Code reads `.claude/agents/` for behavioral guidance
 - Results captured and parsed
 
 ### Phase 3: Lifecycle Phases (Week 5-6)
@@ -978,7 +1115,8 @@ $ agent-os spec --parallel
 | **Resumability** | Manual restart | Automatic from state files |
 | **Cross-spec coordination** | None | Alignment checkpoints |
 | **Orchestration** | User drives | TypeScript drives |
-| **Skill discovery** | Embedded in prompts | Files in `.claude/skills/` |
+| **Commands** | Slash commands in Claude Code | Prompt templates sent via SDK |
+| **Agent behavior** | Embedded in commands | Files in `.claude/agents/` |
 
 ---
 
@@ -1050,83 +1188,141 @@ $ agent-os spec --parallel
 
 ---
 
-## Appendix A: Skill File Format
+## Appendix A: Prompt Template Format
 
-Skills are markdown files with YAML frontmatter that Claude Code reads:
+Prompt templates are stored in `src/prompts/templates/` and support variable interpolation:
 
 ```markdown
----
-name: implement-tasks
-description: Execute implementation tasks from tasks.json
-model: inherit
----
+<!-- src/prompts/templates/write-spec.md -->
 
-# Implement Tasks
+# Write Specification
 
-You are an expert software engineer implementing tasks from a structured task list.
+You are acting as the "spec-writer" agent. Read .claude/agents/spec-writer.md for behavioral guidelines.
 
-## Context
+## Your Task
 
-Read these files before starting:
-- `agent-os/specs/{specId}/spec.md` - The specification
-- `agent-os/specs/{specId}/tasks.json` - Task breakdown
-- `agent-os/product/tech-stack.md` - Technical decisions
-- `agent-os/product/findings.json` - Patterns and gotchas
+Write a complete specification for roadmap item: {{roadmapItemId}}
+- Title: {{item.title}}
+- Description: {{item.description}}
 
-## Rules
+## Context to Read
 
-1. **Execute, don't just plan** - Actually write and run code
-2. **TDD when specified** - Write tests before implementation
-3. **One task at a time** - Complete each task before moving on
-4. **Update status** - Mark tasks complete in tasks.json
-5. **Capture findings** - Note patterns, gotchas, decisions
-6. **Verify with tests** - Run tests after each change
-
-## Task Completion Criteria
-
-A task is complete when:
-- Code is written and compiles
-- Tests pass (if applicable)
-- tasks.json status updated to "completed"
-- Any findings documented
+1. .claude/agents/spec-writer.md - Your behavioral guidelines
+2. agent-os/specs/{{specPath}}/planning/requirements.md - Shaped requirements
+3. agent-os/product/mission.md - Product vision
+4. agent-os/product/tech-stack.md - Technical decisions
+5. agent-os/product/findings.json - Relevant patterns
 
 ## Output
 
-After completing all tasks in the assigned group:
-1. Summary of what was implemented
-2. Any files created or modified
-3. Test results
-4. Findings for institutional knowledge
+Write the specification to: agent-os/specs/{{specPath}}/spec.md
+
+The spec should include:
+- Overview and goals
+- Detailed requirements
+- Technical approach
+- API contracts (if applicable)
+- Data models (if applicable)
+- Edge cases and error handling
+- Testing strategy
+
+After writing, update spec-meta.json with status: "specced"
+```
+
+## Appendix A.2: Agent File Format
+
+Agent files are installed to target project's `.claude/agents/` and provide behavioral guidance:
+
+```markdown
+<!-- Installed to: target-project/.claude/agents/spec-writer.md -->
+---
+name: spec-writer
+description: Technical writer creating detailed specifications
+---
+
+# Spec Writer Agent
+
+You write clear, comprehensive technical specifications.
+
+## Core Principles
+
+1. **Be specific** - Avoid ambiguity, provide concrete examples
+2. **Think about edge cases** - Document error conditions
+3. **Consider dependencies** - Note what other specs this relates to
+4. **Stay in scope** - Don't expand beyond the shaped requirements
+
+## Standards to Follow
+
+Read and apply standards from:
+- `agent-os/standards/global/` - Universal standards
+
+## Writing Style
+
+- Use clear, concise language
+- Include code examples where helpful
+- Structure with clear headings
+- Add diagrams (mermaid) for complex flows
 ```
 
 ---
 
-## Appendix B: State File Locations
+## Appendix B: Target Project File Locations
 
 ```
-project/
-├── agent-os/
+target-project/
+├── agent-os/                      # State files (read/written by Claude)
 │   ├── product/
-│   │   ├── mission.md          # Product vision
-│   │   ├── roadmap.json        # Roadmap items with statuses
-│   │   ├── tech-stack.md       # Technical decisions
-│   │   └── findings.json       # Institutional knowledge
-│   └── specs/
-│       ├── 2026-01-21-auth/
-│       │   ├── spec-meta.json  # Spec metadata and status
-│       │   ├── spec.md         # Full specification
-│       │   ├── tasks.json      # Task breakdown
-│       │   └── planning/
-│       │       └── requirements.md
-│       └── 2026-01-21-profiles/
-│           └── ...
-├── .claude/
-│   └── skills/                 # Skills Claude Code reads
-│       ├── shape-spec.md
-│       ├── write-spec.md
-│       ├── create-tasks.md
-│       └── implement-tasks.md
-└── agent-os.config.json        # Orchestration configuration
+│   │   ├── mission.md             # Product vision
+│   │   ├── roadmap.json           # Roadmap items with statuses
+│   │   ├── tech-stack.md          # Technical decisions
+│   │   └── findings.json          # Institutional knowledge
+│   ├── specs/
+│   │   ├── 2026-01-21-auth/
+│   │   │   ├── spec-meta.json     # Spec metadata and status
+│   │   │   ├── spec.md            # Full specification
+│   │   │   ├── tasks.json         # Task breakdown
+│   │   │   └── planning/
+│   │   │       └── requirements.md
+│   │   └── 2026-01-21-profiles/
+│   │       └── ...
+│   └── standards/                 # Coding standards (from profile)
+│       ├── global/
+│       ├── backend/
+│       └── frontend/
+├── .claude/                       # Claude Code configuration
+│   ├── agents/                    # Agent behavioral guidance
+│   │   ├── implementer.md
+│   │   ├── spec-writer.md
+│   │   ├── product-planner.md
+│   │   └── ...
+│   └── settings.json              # Claude Code settings
+└── agent-os.config.json           # Orchestrator configuration
+```
+
+## Appendix B.2: TypeScript Project File Locations
+
+```
+agent-os/                          # The orchestrator (this project)
+├── src/
+│   ├── prompts/
+│   │   └── templates/             # ★ Prompt templates (sent via SDK)
+│   │       ├── plan-product.md
+│   │       ├── shape-spec.md
+│   │       ├── write-spec.md
+│   │       ├── create-tasks.md
+│   │       ├── implement-tasks.md
+│   │       ├── align-specs.md
+│   │       └── review-findings.md
+│   ├── orchestrator/
+│   ├── lifecycle/
+│   └── ...
+├── profiles/                      # Profile definitions (installed to projects)
+│   ├── default/
+│   │   ├── agents/                # → Installed to .claude/agents/
+│   │   ├── standards/             # → Installed to agent-os/standards/
+│   │   └── schemas/               # → Installed to agent-os/schemas/
+│   └── rails-apps/
+└── ...
 ```
 
 ---
